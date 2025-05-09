@@ -700,7 +700,7 @@ PetscErrorCode writeFieldsToXMF(domain_ *domain, const char* filexmf, PetscReal 
             domain->smObject->DepCount
         );
 
-        writeVectorToXMF
+        /*writeVectorToXMF
         (
             domain,
             filexmf,
@@ -710,7 +710,7 @@ PetscErrorCode writeFieldsToXMF(domain_ *domain, const char* filexmf, PetscReal 
             time,
             "sed0",
             domain->smObject->sm[0]->Sed
-        );
+        );*/
 
         writeScalarToXMF
         (
@@ -724,7 +724,7 @@ PetscErrorCode writeFieldsToXMF(domain_ *domain, const char* filexmf, PetscReal 
             domain->smObject->ExCount
         );
 
-        writeVectorToXMF
+        /*writeVectorToXMF
         (
             domain,
             filexmf,
@@ -734,7 +734,7 @@ PetscErrorCode writeFieldsToXMF(domain_ *domain, const char* filexmf, PetscReal 
             time,
             "dev0",
             domain->smObject->sm[0]->Dev
-        );
+        );*/
 
     }
 

@@ -4647,6 +4647,8 @@ PetscErrorCode CurvibInterpolation(ibm_ *ibm)
                 // interpolate the velocity of the projected point on the IBM solid element from its nodes
                 ibmPtVel.x =   ibm->ibmBody[ibF[c].bodyID]->ibmSurface[ibF[c].sID]->fixedU.x;
 
+                //printf("SET %f %f\n", ibmPtVel.x,  ibm->ibmBody[ibF[c].bodyID]->ibmSurface[ibF[c].sID]->fixedU.x);
+
                 ibmPtVel.y =   ibm->ibmBody[ibF[c].bodyID]->ibmSurface[ibF[c].sID]->fixedU.y;
 
                 ibmPtVel.z =   ibm->ibmBody[ibF[c].bodyID]->ibmSurface[ibF[c].sID]->fixedU.z;
@@ -4906,12 +4908,12 @@ PetscErrorCode CurvibInterpolation(ibm_ *ibm)
          {
              PetscScalar ***sm0, ***sm1, ***sm2, ***sm3, ***sm4, ***sm5;
 
-             DMDAVecGetArray(da, ibm->access->smObject->sm[0]->smVal, &sm0);
-             DMDAVecGetArray(da, ibm->access->smObject->sm[1]->smVal, &sm1);
-             DMDAVecGetArray(da, ibm->access->smObject->sm[2]->smVal, &sm2);
-             DMDAVecGetArray(da, ibm->access->smObject->sm[3]->smVal, &sm3);
-             DMDAVecGetArray(da, ibm->access->smObject->sm[4]->smVal, &sm4);
-             DMDAVecGetArray(da, ibm->access->smObject->sm[5]->smVal, &sm5);
+             DMDAVecGetArray(da, ibm->access->smObject->sm[0]->lsmVal, &sm0);
+             DMDAVecGetArray(da, ibm->access->smObject->sm[1]->lsmVal, &sm1);
+             DMDAVecGetArray(da, ibm->access->smObject->sm[2]->lsmVal, &sm2);
+             DMDAVecGetArray(da, ibm->access->smObject->sm[3]->lsmVal, &sm3);
+             DMDAVecGetArray(da, ibm->access->smObject->sm[4]->lsmVal, &sm4);
+             DMDAVecGetArray(da, ibm->access->smObject->sm[5]->lsmVal, &sm5);
 
              if(ibm->ibmBody[ibF[c].bodyID]->bodyType == "surfaceBody")
              {
@@ -4924,6 +4926,14 @@ PetscErrorCode CurvibInterpolation(ibm_ *ibm)
                       sm3[k][j][i] = ibm->ibmBody[ibF[c].bodyID]->ibmSurface[ibF[c].sID]->fixedSM3;
                       sm4[k][j][i] = ibm->ibmBody[ibF[c].bodyID]->ibmSurface[ibF[c].sID]->fixedSM4;
                       sm5[k][j][i] = ibm->ibmBody[ibF[c].bodyID]->ibmSurface[ibF[c].sID]->fixedSM5;
+
+                      sm0[k+1][j][i] = ibm->ibmBody[ibF[c].bodyID]->ibmSurface[ibF[c].sID]->fixedSM0;
+                      sm1[k+1][j][i] = ibm->ibmBody[ibF[c].bodyID]->ibmSurface[ibF[c].sID]->fixedSM1;
+                      sm2[k+1][j][i] = ibm->ibmBody[ibF[c].bodyID]->ibmSurface[ibF[c].sID]->fixedSM2;
+                      sm3[k+1][j][i] = ibm->ibmBody[ibF[c].bodyID]->ibmSurface[ibF[c].sID]->fixedSM3;
+                      sm4[k+1][j][i] = ibm->ibmBody[ibF[c].bodyID]->ibmSurface[ibF[c].sID]->fixedSM4;
+                      sm5[k+1][j][i] = ibm->ibmBody[ibF[c].bodyID]->ibmSurface[ibF[c].sID]->fixedSM5;
+                      //printf("%f %f\n", sm0[k+1][j][i], sm0[k][j][i]);
                  }
                  else
                  {
@@ -4936,12 +4946,25 @@ PetscErrorCode CurvibInterpolation(ibm_ *ibm)
                  //only surface body sources for sm needed at this point.
              }
 
-             DMDAVecRestoreArray(da, ibm->access->smObject->sm[0]->smVal, &sm0);
-             DMDAVecRestoreArray(da, ibm->access->smObject->sm[1]->smVal, &sm1);
-             DMDAVecRestoreArray(da, ibm->access->smObject->sm[2]->smVal, &sm2);
-             DMDAVecRestoreArray(da, ibm->access->smObject->sm[3]->smVal, &sm3);
-             DMDAVecRestoreArray(da, ibm->access->smObject->sm[4]->smVal, &sm4);
-             DMDAVecRestoreArray(da, ibm->access->smObject->sm[5]->smVal, &sm5);
+             DMDAVecRestoreArray(da, ibm->access->smObject->sm[0]->lsmVal, &sm0);
+             DMDAVecRestoreArray(da, ibm->access->smObject->sm[1]->lsmVal, &sm1);
+             DMDAVecRestoreArray(da, ibm->access->smObject->sm[2]->lsmVal, &sm2);
+             DMDAVecRestoreArray(da, ibm->access->smObject->sm[3]->lsmVal, &sm3);
+             DMDAVecRestoreArray(da, ibm->access->smObject->sm[4]->lsmVal, &sm4);
+             DMDAVecRestoreArray(da, ibm->access->smObject->sm[5]->lsmVal, &sm5);
+
+             /*DMLocalToLocalBegin(da, ibm->access->smObject->sm[0]->lsmVal, INSERT_VALUES, ibm->access->smObject->sm[0]->lsmVal);
+             DMLocalToLocalEnd(da, ibm->access->smObject->sm[0]->lsmVal, INSERT_VALUES, ibm->access->smObject->sm[0]->lsmVal);
+             DMLocalToLocalBegin(da, ibm->access->smObject->sm[1]->lsmVal, INSERT_VALUES, ibm->access->smObject->sm[1]->lsmVal);
+             DMLocalToLocalEnd(da, ibm->access->smObject->sm[1]->lsmVal, INSERT_VALUES, ibm->access->smObject->sm[1]->lsmVal);
+             DMLocalToLocalBegin(da, ibm->access->smObject->sm[2]->lsmVal, INSERT_VALUES, ibm->access->smObject->sm[2]->lsmVal);
+             DMLocalToLocalEnd(da, ibm->access->smObject->sm[2]->lsmVal, INSERT_VALUES, ibm->access->smObject->sm[2]->lsmVal);
+             DMLocalToLocalBegin(da, ibm->access->smObject->sm[3]->lsmVal, INSERT_VALUES, ibm->access->smObject->sm[3]->lsmVal);
+             DMLocalToLocalEnd(da, ibm->access->smObject->sm[3]->lsmVal, INSERT_VALUES, ibm->access->smObject->sm[3]->lsmVal);
+             DMLocalToLocalBegin(da, ibm->access->smObject->sm[4]->lsmVal, INSERT_VALUES, ibm->access->smObject->sm[4]->lsmVal);
+             DMLocalToLocalEnd(da, ibm->access->smObject->sm[4]->lsmVal, INSERT_VALUES, ibm->access->smObject->sm[4]->lsmVal);
+             DMLocalToLocalBegin(da, ibm->access->smObject->sm[5]->lsmVal, INSERT_VALUES, ibm->access->smObject->sm[5]->lsmVal);
+             DMLocalToLocalEnd(da, ibm->access->smObject->sm[5]->lsmVal, INSERT_VALUES, ibm->access->smObject->sm[5]->lsmVal);*/
          }
 
          // save the element acceleration term (dudt . elementNormal)

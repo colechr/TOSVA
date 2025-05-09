@@ -294,14 +294,6 @@ PetscErrorCode readFields(domain_ *domain, PetscReal timeValue)
     VecLoad(mesh->Nvert,viewer);
     PetscViewerDestroy(&viewer);
 
-    //read ibm field
-    PetscPrintf(mesh->MESH_COMM, "Reading vents...\n");
-    field = "/vents";
-    fileName = location + field;
-    PetscViewerBinaryOpen(mesh->MESH_COMM, fileName.c_str(), FILE_MODE_READ, &viewer);
-    VecLoad(mesh->ventMarkers,viewer);
-    PetscViewerDestroy(&viewer);
-
     // read temperature
     if(domain->flags.isTeqnActive)
     {
@@ -396,12 +388,12 @@ PetscErrorCode readFields(domain_ *domain, PetscReal timeValue)
         VecLoad(smObject->DepCount, viewer);
         PetscViewerDestroy(&viewer);
 
-        PetscPrintf(mesh->MESH_COMM, "Reading sed0...\n");
+        /*PetscPrintf(mesh->MESH_COMM, "Reading sed0...\n");
         field = "/sed0";
         fileName = location + field;
         PetscViewerBinaryOpen(mesh->MESH_COMM, fileName.c_str(), FILE_MODE_READ, &viewer);
         VecLoad(smObject->sm[0]->Sed, viewer);
-        PetscViewerDestroy(&viewer);
+        PetscViewerDestroy(&viewer);*/
 
         PetscPrintf(mesh->MESH_COMM, "Reading exCount0...\n");
         field = "/exCount0";
@@ -410,12 +402,12 @@ PetscErrorCode readFields(domain_ *domain, PetscReal timeValue)
         VecLoad(smObject->ExCount, viewer);
         PetscViewerDestroy(&viewer);
 
-        PetscPrintf(mesh->MESH_COMM, "Reading dev0...\n");
+        /*PetscPrintf(mesh->MESH_COMM, "Reading dev0...\n");
         field = "/dev0";
         fileName = location + field;
         PetscViewerBinaryOpen(mesh->MESH_COMM, fileName.c_str(), FILE_MODE_READ, &viewer);
         VecLoad(smObject->sm[0]->Dev, viewer);
-        PetscViewerDestroy(&viewer);
+        PetscViewerDestroy(&viewer);*/
 
     }
 
@@ -2274,11 +2266,6 @@ PetscErrorCode writeFields(io_ *io)
         writeBinaryField(mesh->MESH_COMM, mesh->Nvert, fieldName.c_str());
         MPI_Barrier(mesh->MESH_COMM);
 
-        // write vents
-        fieldName = timeName + "/vents";
-        writeBinaryField(mesh->MESH_COMM, mesh->ventMarkers, fieldName.c_str());
-        MPI_Barrier(mesh->MESH_COMM);
-
         // write temperature
         if(flags->isTeqnActive)
         {
@@ -2349,9 +2336,9 @@ PetscErrorCode writeFields(io_ *io)
             MPI_Barrier(mesh->MESH_COMM);
 
             // write sed0
-            fieldName = timeName + "/sed0";
+            /*fieldName = timeName + "/sed0";
             writeBinaryField(mesh->MESH_COMM, smObject->sm[0]->Sed, fieldName.c_str());
-            MPI_Barrier(mesh->MESH_COMM);
+            MPI_Barrier(mesh->MESH_COMM);*/
 
             // write exCount0
             fieldName = timeName + "/exCount0";
@@ -2359,9 +2346,9 @@ PetscErrorCode writeFields(io_ *io)
             MPI_Barrier(mesh->MESH_COMM);
 
             // write dev0 note that dev0 and sed0 are not multuplied by aj but devP sedP are.
-            fieldName = timeName + "/dev0";
+            /*fieldName = timeName + "/dev0";
             writeBinaryField(mesh->MESH_COMM, smObject->sm[0]->Dev, fieldName.c_str());
-            MPI_Barrier(mesh->MESH_COMM);
+            MPI_Barrier(mesh->MESH_COMM);*/
 
         }
 

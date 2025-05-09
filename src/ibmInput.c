@@ -206,6 +206,7 @@ PetscErrorCode readIBMProperties(ibm_ *ibm)
             {
                 sprintf(fixedUName, "fixedU%ld", s);
                 readSubDictVector("./IBM/IBMProperties.dat", objectName, fixedUName, &(ibmSurface->fixedU));
+                //printf("READ %f\n", ibmSurface->fixedU.x);
             }
             else if(ibmBody->uSourceFlagSurf[s] == 2)
             {
