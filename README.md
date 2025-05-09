@@ -4,7 +4,7 @@
 *(Toolbox fOr Simulating Ventilation and Aerosols)*
 
 TOSVA is a branch of [TOSCA](https://sebastipa.github.io/TOSCA/), an incompressible finite-volume large-eddy simulation code formulated in curvilinear coordinates 
-with Boussinesq approximation to account for buoyancy. It features a moving immersed boundary method, synthetic turbulence generation through the Inverse Fourier method, and Eulerian particle tracking through the quadrature method of moments. It has been successfully used to simulate flow around a mannequin in a wind tunnel, human thermal plumes, and particle dispersion/deposition in a 1.8x1.77x1.9 meter air chamber. TOSVA is currently developed at the [Computational Fluid Dynamics Laboratory of the University of British Columbia, Okanagan Campus](https://cfdlab.ok.ubc.ca/wind-farm-blockage-and-wake-effects/). 
+with Boussinesq approximation to account for buoyancy. It features a moving immersed boundary method, synthetic turbulence generation through the Inverse Fourier method, and Eulerian particle tracking through the quadrature method of moments. It has been successfully used to simulate flow around a mannequin in a wind tunnel, human thermal plumes, and particle dispersion/deposition in a 1.8x1.77x1.9 meter air chamber. TOSVA is currently being developed at the [Computational Fluid Dynamics Laboratory of the University of British Columbia, Okanagan Campus](https://cfdlab.ok.ubc.ca/wind-farm-blockage-and-wake-effects/). 
 
 We kindly ask you to *please* fill up [this](https://docs.google.com/forms/d/e/1FAIpQLSfUGtlHbCPfSI4-CO4bC9D4YsjcHis3Tu7UPTJeYqiB7BgCXA/viewform?usp=header) 
 survey, which allows us to keep track of new TOSCA/TOSVA users around the world.
@@ -34,8 +34,8 @@ For different matters, please contact colechr@mail.ubc.ca.
 
 ## Executables
 
- - `tosca`    : transient solver for stratified incompressible flows. Temperature stratification is accounted via Boussinesq approximation.
- - `tosca2PV` : post processor for ParaView visualization. Writes data in XMF/HDF format.
+ - `tosva`    : transient solver for stratified incompressible flows. Temperature stratification is accounted via Boussinesq approximation.
+ - `tosva2PV` : post processor for ParaView visualization. Writes data in XMF/HDF format.
 
 ## Future Implementations:
 
