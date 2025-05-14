@@ -3,7 +3,7 @@
 ## *Welcome to the repository of TOSVA*
 *(Toolbox fOr Simulating Ventilation and Aerosols)*
 
-TOSVA is a branch of [TOSCA](https://sebastipa.github.io/TOSCA/), an incompressible finite-volume large-eddy simulation code formulated in curvilinear coordinates 
+TOSVA's parent code is [TOSCA](https://sebastipa.github.io/TOSCA/), an incompressible finite-volume large-eddy simulation code formulated in curvilinear coordinates 
 with Boussinesq approximation to account for buoyancy. It features a moving immersed boundary method, synthetic turbulence generation through the Inverse Fourier method, and Eulerian particle tracking through the quadrature method of moments. It has been successfully used to simulate flow around a mannequin in a wind tunnel, human thermal plumes, and particle dispersion/deposition. TOSVA is currently being developed at the [Computational Fluid Dynamics Laboratory of the University of British Columbia, Okanagan Campus](https://cfdlab.ok.ubc.ca/wind-farm-blockage-and-wake-effects/). 
 
 We kindly ask you to *please* fill up [this](https://docs.google.com/forms/d/e/1FAIpQLSfUGtlHbCPfSI4-CO4bC9D4YsjcHis3Tu7UPTJeYqiB7BgCXA/viewform?usp=header) 
