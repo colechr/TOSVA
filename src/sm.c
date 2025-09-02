@@ -5,8 +5,12 @@
 #include "include/io.h"
 #include "include/inline.h"
 #include "include/boundary.h"
-#include <Eigen/Dense>
 #include <iostream>
+#include <Eigen/Dense>
+#include <vector>
+#include <cmath>
+#include <stdexcept>
+#include <algorithm>
 
 
 //***************************************************************************************************************//
@@ -39,6 +43,42 @@ PetscErrorCode InitializeSMObject(SMObj_ *smObject)
         smObject->OGConc = 0;
         smObject->monoDFrac = 0;
         smObject->rhoPart = 0;
+
+        smObject->GMD = 0;
+        smObject->GSD = 0;
+        smObject->concFrac = 0;
+
+        // input file
+        PetscOptionsInsertFile(mesh->MESH_COMM, PETSC_NULL, "control.dat", PETSC_TRUE);
+
+        // read divergence scheme
+        readDictWord("control.dat", "-divSchemeSM", &(smObject->divSchemeSM));
+
+        if (smObject->divSchemeSM != "quick" && smObject->divSchemeSM != "muscl" && smObject->divSchemeSM != "upwind")
+        {
+            char error[512];
+            sprintf(error, "SM solver is only compatible with quick muscl or upwind schemes");
+            fatalErrorInFunction("InitializeSMObject", error);
+        }
+
+        // read time discretization scheme
+        readDictWord("control.dat", "-dSMdtScheme", &(smObject->ddtScheme));
+
+        if (smObject->ddtScheme == "rungeKutta4" || smObject->ddtScheme == "rungeKuttaSSP10")
+        {
+
+        }
+        else
+        {
+            char error[512];
+            sprintf(error, "unknown ddtScheme for SM equation, available schemes are\n    1. rungeKutta4  2. rungeKuttaSSP10\n");
+            fatalErrorInFunction("InitializeSMObject", error);
+        }
+
+        // read time discretization scheme
+        readDictWord("control.dat", "-WaAMethod", &(smObject->WaAMethod));
+
+        readDictDouble("control.dat", "-iRate", &(smObject->IR));
 
     }
 
@@ -96,19 +136,6 @@ PetscErrorCode InitializeSM(sm_ *sm)
         VecDuplicate(mesh->Nvert, &(sm->devPrint));      VecSet(sm->devPrint,   0.0);
         VecDuplicate(mesh->Nvert, &(sm->sedPrint));      VecSet(sm->sedPrint,   0.0);
 
-        // read time discretization scheme
-        readDictWord("control.dat", "-dSMdtScheme", &(sm->ddtScheme));
-
-        if (sm->ddtScheme=="rungeKutta4")
-        {
-
-        }
-        else
-        {
-            char error[512];
-            sprintf(error, "unknown ddtScheme %s for SM equation, available schemes are\n    1. rungeKutta4\n", sm->ddtScheme.c_str());
-            fatalErrorInFunction("InitializeSM", error);
-        }
     }
 
     return(0);
@@ -223,43 +250,69 @@ PetscErrorCode FormSM(sm_ *sm, Vec &Rhs, PetscReal scale, PetscInt ii)
                 //skip all solid cells and fluid cells with solid on right face
                 if (isIBMSolidCell(k, j, i, nvert) || isIBMSolidCell(k, j, i+1, nvert)) continue;
 
-                //divergence term using quick scheme
-                if (i == 0 || isIBMSolidCell(k, j, i-1, nvert))
+                if (sm->access->smObject->divSchemeSM == "quick")
+                {
+                    //divergence term using quick scheme
+                    if (i == 0 || isIBMSolidCell(k, j, i-1, nvert))
+                    {
+                        div[k][j][i].x =
+                        - ucont[k][j][i].x
+                        * quickSM
+                        (
+                            lsmVal[k][j][i],
+                            lsmVal[k][j][i],
+                            lsmVal[k][j][i+1],
+                            lsmVal[k][j][i+2],
+                            ucont[k][j][i].x
+                        );
+                    }
+                    else if (i == mx-2 || isIBMSolidCell(k, j, i+2, nvert))
+                    {
+                        div[k][j][i].x =
+                        - ucont[k][j][i].x
+                        * quickSM
+                        (
+                            lsmVal[k][j][i-1],
+                            lsmVal[k][j][i],
+                            lsmVal[k][j][i+1],
+                            lsmVal[k][j][i+1],
+                            ucont[k][j][i].x
+                        );
+                    }
+                    else
+                    {
+                        div[k][j][i].x =
+                        - ucont[k][j][i].x
+                        * quickSM
+                        (
+                            lsmVal[k][j][i-1],
+                            lsmVal[k][j][i],
+                            lsmVal[k][j][i+1],
+                            lsmVal[k][j][i+2],
+                            ucont[k][j][i].x
+                        );
+                    }
+                }
+                else if (sm->access->smObject->divSchemeSM == "muscl")
                 {
                     div[k][j][i].x =
                     - ucont[k][j][i].x
-                    * quickSM
-                    (
-                        lsmVal[k][j][i],
+                    * muscl(
+                        lsmVal[k][j][i-1],
                         lsmVal[k][j][i],
                         lsmVal[k][j][i+1],
                         lsmVal[k][j][i+2],
                         ucont[k][j][i].x
                     );
                 }
-                else if (i == mx-2 || isIBMSolidCell(k, j, i+2, nvert))
+                else if (sm->access->smObject->divSchemeSM == "upwind")
                 {
                     div[k][j][i].x =
                     - ucont[k][j][i].x
-                    * quickSM
+                    * upwind
                     (
-                        lsmVal[k][j][i-1],
                         lsmVal[k][j][i],
                         lsmVal[k][j][i+1],
-                        lsmVal[k][j][i+1],
-                        ucont[k][j][i].x
-                    );
-                }
-                else
-                {
-                    div[k][j][i].x =
-                    - ucont[k][j][i].x
-                    * quickSM
-                    (
-                        lsmVal[k][j][i-1],
-                        lsmVal[k][j][i],
-                        lsmVal[k][j][i+1],
-                        lsmVal[k][j][i+2],
                         ucont[k][j][i].x
                     );
                 }
@@ -354,43 +407,69 @@ PetscErrorCode FormSM(sm_ *sm, Vec &Rhs, PetscReal scale, PetscInt ii)
                 //skip all solid cells and fluid cells with solid on right face
                 if (isIBMSolidCell(k, j, i, nvert) || isIBMSolidCell(k, j+1, i, nvert)) continue;
 
-                //divergence term using quick scheme
-                if (j == 0 || isIBMSolidCell(k, j-1, i, nvert))
+                if (sm->access->smObject->divSchemeSM == "quick")
+                {
+                    //divergence term using quick scheme
+                    if (j == 0 || isIBMSolidCell(k, j-1, i, nvert))
+                    {
+                        div[k][j][i].y =
+                        - ucont[k][j][i].y
+                        * quickSM
+                        (
+                            lsmVal[k][j][i],
+                            lsmVal[k][j][i],
+                            lsmVal[k][j+1][i],
+                            lsmVal[k][j+2][i],
+                            ucont[k][j][i].y
+                        );
+                    }
+                    else if (j == my-2 || isIBMSolidCell(k, j+2, i, nvert))
+                    {
+                        div[k][j][i].y =
+                        - ucont[k][j][i].y
+                        * quickSM
+                        (
+                            lsmVal[k][j-1][i],
+                            lsmVal[k][j][i],
+                            lsmVal[k][j+1][i],
+                            lsmVal[k][j+1][i],
+                            ucont[k][j][i].y
+                        );
+                    }
+                    else
+                    {
+                        div[k][j][i].y =
+                        - ucont[k][j][i].y
+                        * quickSM
+                        (
+                            lsmVal[k][j-1][i],
+                            lsmVal[k][j][i],
+                            lsmVal[k][j+1][i],
+                            lsmVal[k][j+2][i],
+                            ucont[k][j][i].y
+                        );
+                    }
+                }
+                else if (sm->access->smObject->divSchemeSM == "muscl")
                 {
                     div[k][j][i].y =
                     - ucont[k][j][i].y
-                    * quickSM
-                    (
-                        lsmVal[k][j][i],
+                    * muscl(
+                        lsmVal[k][j-1][i],
                         lsmVal[k][j][i],
                         lsmVal[k][j+1][i],
                         lsmVal[k][j+2][i],
                         ucont[k][j][i].y
                     );
                 }
-                else if (j == my-2 || isIBMSolidCell(k, j+2, i, nvert))
+                else if (sm->access->smObject->divSchemeSM == "upwind")
                 {
                     div[k][j][i].y =
                     - ucont[k][j][i].y
-                    * quickSM
+                    * upwind
                     (
-                        lsmVal[k][j-1][i],
                         lsmVal[k][j][i],
                         lsmVal[k][j+1][i],
-                        lsmVal[k][j+1][i],
-                        ucont[k][j][i].y
-                    );
-                }
-                else
-                {
-                    div[k][j][i].y =
-                    - ucont[k][j][i].y
-                    * quickSM
-                    (
-                        lsmVal[k][j-1][i],
-                        lsmVal[k][j][i],
-                        lsmVal[k][j+1][i],
-                        lsmVal[k][j+2][i],
                         ucont[k][j][i].y
                     );
                 }
@@ -481,43 +560,70 @@ PetscErrorCode FormSM(sm_ *sm, Vec &Rhs, PetscReal scale, PetscInt ii)
                 //skip all solid cells and fluid cells with solid on right face
                 if (isIBMSolidCell(k, j, i, nvert) || isIBMSolidCell(k+1, j, i, nvert)) continue;
 
-                //divergence term using quick scheme
-                if (k == 0 || isIBMSolidCell(k-1, j, i, nvert))
+                if (sm->access->smObject->divSchemeSM == "quick")
+                {
+                    //divergence term using quick scheme
+                    if (k == 0 || isIBMSolidCell(k-1, j, i, nvert))
+                    {
+                        div[k][j][i].z =
+                        - ucont[k][j][i].z
+                        * quickSM
+                        (
+                            lsmVal[k][j][i],
+                            lsmVal[k][j][i],
+                            lsmVal[k+1][j][i],
+                            lsmVal[k+2][j][i],
+                            ucont[k][j][i].z
+                        );
+                    }
+                    else if (k == mz-2 || isIBMSolidCell(k+2, j, i, nvert))
+                    {
+                        div[k][j][i].z =
+                        - ucont[k][j][i].z
+                        * quickSM
+                        (
+                            lsmVal[k-1][j][i],
+                            lsmVal[k][j][i],
+                            lsmVal[k+1][j][i],
+                            lsmVal[k+1][j][i],
+                            ucont[k][j][i].z
+                        );
+                    }
+                    else
+                    {
+                        div[k][j][i].z =
+                        - ucont[k][j][i].z
+                        * quickSM
+                        (
+                            lsmVal[k-1][j][i],
+                            lsmVal[k][j][i],
+                            lsmVal[k+1][j][i],
+                            lsmVal[k+2][j][i],
+                            ucont[k][j][i].z
+                        );
+                    }
+                }
+                else if (sm->access->smObject->divSchemeSM == "muscl")
                 {
                     div[k][j][i].z =
                     - ucont[k][j][i].z
-                    * quickSM
+                    * muscl
                     (
-                        lsmVal[k][j][i],
+                        lsmVal[k-1][j][i],
                         lsmVal[k][j][i],
                         lsmVal[k+1][j][i],
                         lsmVal[k+2][j][i],
                         ucont[k][j][i].z
                     );
                 }
-                else if (k == mz-2 || isIBMSolidCell(k+2, j, i, nvert))
+                else if (sm->access->smObject->divSchemeSM == "upwind")
                 {
                     div[k][j][i].z =
                     - ucont[k][j][i].z
-                    * quickSM
+                    * upwind
                     (
-                        lsmVal[k-1][j][i],
                         lsmVal[k][j][i],
                         lsmVal[k+1][j][i],
-                        lsmVal[k+1][j][i],
-                        ucont[k][j][i].z
-                    );
-                }
-                else
-                {
-                    div[k][j][i].z =
-                    - ucont[k][j][i].z
-                    * quickSM
-                    (
-                        lsmVal[k-1][j][i],
-                        lsmVal[k][j][i],
-                        lsmVal[k+1][j][i],
-                        lsmVal[k+2][j][i],
                         ucont[k][j][i].z
                     );
                 }
@@ -732,8 +838,8 @@ PetscErrorCode FormExplicitRhsSM(sm_ *sm, PetscInt ii)
     //PetscTime(&te1);
     //PetscPrintf(mesh->MESH_COMM,"%li Elapsed Time VISC = %f\n", ii, te1-ts1);
 
-    // add coag source terms
-    if(sm->access->flags->isCoagSourceActive)
+    // add coagulation source terms
+    if(sm->access->flags->isCoagSourceActive && (sm->access->clock->it != sm->access->clock->itStart))
     {
         //PetscTime(&ts1);
         formCoagSourceExp(sm, ii);
@@ -743,7 +849,7 @@ PetscErrorCode FormExplicitRhsSM(sm_ *sm, PetscInt ii)
     }
 
     // add deposition source terms
-    if(sm->access->flags->isDepoSourceActive)
+    if(sm->access->flags->isDepoSourceActive && (sm->access->clock->it != sm->access->clock->itStart))
     {
         //PetscTime(&ts);
         //PetscTime(&ts1);
@@ -753,8 +859,8 @@ PetscErrorCode FormExplicitRhsSM(sm_ *sm, PetscInt ii)
         //PetscPrintf(mesh->MESH_COMM,"%li Elapsed Time DEP = %f\n", ii, te1-ts1);
     }
 
-    // add deposition source terms
-    if(sm->access->flags->isSediFluxActive)
+    //  add sedimentation flux terms
+    if(sm->access->flags->isSediFluxActive && (sm->access->clock->it != sm->access->clock->itStart))
     {
         //PetscTime(&ts1);
         VecSet(sm->sedCent, 0.0);
@@ -764,15 +870,14 @@ PetscErrorCode FormExplicitRhsSM(sm_ *sm, PetscInt ii)
 
     }
 
-    // add deposition source terms
-    if(sm->access->flags->isDeviFluxActive)
+    // add deviation flux terms, skip on first iteration for stability
+    if(sm->access->flags->isDeviFluxActive && (sm->access->clock->it != sm->access->clock->itStart))
     {
         //PetscTime(&ts1);
         VecSet(sm->devCent, 0.0);
         devFluxSM(sm, sm->Rhs, -1.0, ii);
         //PetscTime(&te1);
-        //PetscPrintf(mesh->MESH_COMM,"%li Elapsed Time DEVV = %f\n", ii, te1-ts1);
-
+        //PetscPrintf(mesh->MESH_COMM,"%li Elapsed Time DEV = %f\n", ii, te1-ts1);
     }
 
     // set to zero at non-resolved cell faces, this does not includeIBFluid for SM values!
@@ -822,6 +927,11 @@ PetscErrorCode SMRK4(SMObj_ *smObject)
     {
         PetscPrintf(mesh->MESH_COMM, "%ld, ", i+1);
 
+        for (PetscInt ii = 0; ii < flags->isScalarMomentsActive; ii++)
+        {
+            resetNegScalars(smObject->sm[ii], ii);
+        }
+
         // compute intermediate U guess and evaluate RHS
         if(i!=0)
         {
@@ -840,7 +950,6 @@ PetscErrorCode SMRK4(SMObj_ *smObject)
         {
             quickUpdateWeightsAndAbscissi(smObject);
         }
-
 
         for (PetscInt ii = 0; ii < flags->isScalarMomentsActive; ii++)
         {
@@ -872,6 +981,74 @@ PetscErrorCode SMRK4(SMObj_ *smObject)
 
 //***************************************************************************************************************//
 
+PetscErrorCode SSPRK104(SMObj_ *smObject)
+{
+    mesh_  *mesh  = smObject->sm[0]->access->mesh;
+    clock_ *clock = smObject->sm[0]->access->clock;
+    flags_ *flags = smObject->sm[0]->access->flags;
+
+    PetscReal ts, te;
+    PetscTime(&ts);
+    PetscPrintf(mesh->MESH_COMM, "SSPRK(10,4): Solving for SM, Stage ");
+
+    const PetscInt s = 10;
+    const PetscReal dt = clock->dt;
+
+    // SSPRK(10,4) coefficients (from Ketcheson 2008)
+    const PetscReal a[10] = {
+        0.0, 1.0, 0.5, 0.5, 1.0, 0.25, 0.25, 0.5, 0.5, 1.0
+    };
+    const PetscReal b[10] = {
+        0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1
+    };
+
+    for (PetscInt ii = 0; ii < flags->isScalarMomentsActive; ii++) {
+        VecCopy(smObject->sm[ii]->sm_o, smObject->sm[ii]->smTmp);
+    }
+
+    for (PetscInt i = 0; i < s; i++) {
+        PetscPrintf(mesh->MESH_COMM, "%ld, ", i + 1);
+
+        for (PetscInt ii = 0; ii < flags->isScalarMomentsActive; ii++) {
+            resetNegScalars(smObject->sm[ii], ii);
+        }
+
+        if (i != 0) {
+            for (PetscInt ii = 0; ii < flags->isScalarMomentsActive; ii++) {
+                VecWAXPY(smObject->sm[ii]->smVal, a[i] * dt, smObject->sm[ii]->Rhs, smObject->sm[ii]->sm_o);
+                DMGlobalToLocalBegin(mesh->da, smObject->sm[ii]->smVal, INSERT_VALUES, smObject->sm[ii]->lsmVal);
+                DMGlobalToLocalEnd(mesh->da, smObject->sm[ii]->smVal, INSERT_VALUES, smObject->sm[ii]->lsmVal);
+                UpdateScalarMomentBCs(smObject->sm[ii], ii);
+            }
+        }
+
+        if (flags->isCoagSourceActive || flags->isDepoSourceActive || flags->isSediFluxActive || flags->isDeviFluxActive) {
+            quickUpdateWeightsAndAbscissi(smObject);
+        }
+
+        for (PetscInt ii = 0; ii < flags->isScalarMomentsActive; ii++) {
+            FormExplicitRhsSM(smObject->sm[ii], ii);
+        }
+
+        for (PetscInt ii = 0; ii < flags->isScalarMomentsActive; ii++) {
+            VecAXPY(smObject->sm[ii]->smTmp, dt * b[i], smObject->sm[ii]->Rhs);
+        }
+    }
+
+    for (PetscInt ii = 0; ii < flags->isScalarMomentsActive; ii++) {
+        VecCopy(smObject->sm[ii]->smTmp, smObject->sm[ii]->smVal);
+        DMGlobalToLocalBegin(mesh->da, smObject->sm[ii]->smVal, INSERT_VALUES, smObject->sm[ii]->lsmVal);
+        DMGlobalToLocalEnd(mesh->da, smObject->sm[ii]->smVal, INSERT_VALUES, smObject->sm[ii]->lsmVal);
+    }
+
+    PetscTime(&te);
+    PetscPrintf(mesh->MESH_COMM, "Elapsed Time = %f\n", te - ts);
+    return 0;
+}
+
+
+//***************************************************************************************************************//
+
 PetscErrorCode SolveSM(SMObj_ *smObject)
 {
     mesh_          *mesh = smObject->sm[0]->access->mesh;
@@ -883,9 +1060,13 @@ PetscErrorCode SolveSM(SMObj_ *smObject)
        VecSet (smObject->sm[ii]->Rhs, 0.0);
     }
 
-    if (smObject->sm[0]->ddtScheme=="rungeKutta4")
+    if (smObject->ddtScheme=="rungeKutta4")
     {
         SMRK4(smObject);
+    }
+    else if (smObject->ddtScheme=="rungeKuttaSSP10")
+    {
+        SSPRK104(smObject);
     }
     else
     {
@@ -913,7 +1094,7 @@ PetscErrorCode quickUpdateWeightsAndAbscissi(SMObj_ *smObject)
     PetscInt      mx   = info.mx, my = info.my, mz = info.mz;
 
     PetscInt      lxs, lxe, lys, lye, lzs, lze;
-    PetscInt      i, j, k, cols, rows, idxm, idxn, n, eig, nev;
+    PetscInt      i, j, k, cols, rows, idxm, idxn, n, eig, nev, ***markVent;
 
     PetscReal     ***nvert;
     PetscReal     value, *a, *An, *Bn, *Vec0, *Vec1, *Vec2, *Vec3, *Vec4, *Vec5;
@@ -966,6 +1147,7 @@ PetscErrorCode quickUpdateWeightsAndAbscissi(SMObj_ *smObject)
     DMDAVecGetArray(da, smObject->weightAbsc[2]->absc, &absc2);
 
     DMDAVecGetArray(da,  mesh->lNvert, &nvert);
+    DMDAVecGetArray(da,  mesh->ventMarkers, &markVent);
 
     //loop to all cells and set weight and abscissi
     for (k=zs; k<ze; k++)
@@ -975,149 +1157,305 @@ PetscErrorCode quickUpdateWeightsAndAbscissi(SMObj_ *smObject)
             for (i=xs; i<xe; i++)
             {
 
-                if (sm0[k][j][i] <= 1e-3 || isIBMSolidCell(k, j, i, nvert))
+                if (smObject->WaAMethod == "PD")
                 {
-                    weight0[k][j][i] = 0.;
-                    weight1[k][j][i] = 0.;
-                    weight2[k][j][i] = 0.;
-
-                    absc0[k][j][i] = 0.;
-                    absc1[k][j][i] = 0.;
-                    absc2[k][j][i] = 0.;
-
-                    continue;
-                }
-
-                //loop to set P(rows,cols) at each cell
-                for (cols=0; cols<7; cols++)
-                {
-                    if (cols == 0)
+                    if (sm0[k][j][i] <= 1e-3 || isIBMSolidCell(k, j, i, nvert) || sm0[k][j][i] > 10)
                     {
-                        Vec0[cols] = 1.0;
-                        Vec1[cols] = 0.0;
-                        Vec2[cols] = 0.0;
-                        Vec3[cols] = 0.0;
-                        Vec4[cols] = 0.0;
-                        Vec5[cols] = 0.0;
+                        weight0[k][j][i] = 0.;
+                        weight1[k][j][i] = 0.;
+                        weight2[k][j][i] = 0.;
+
+                        absc0[k][j][i] = 0.;
+                        absc1[k][j][i] = 0.;
+                        absc2[k][j][i] = 0.;
+
+                        continue;
                     }
 
-                    if (cols == 1)
+                    //loop to set P(rows,cols) at each cell
+                    for (cols=0; cols<7; cols++)
                     {
-                        Vec0[cols] = sm0[k][j][i];
-                        Vec1[cols] = -sm1[k][j][i];
-                        Vec2[cols] = sm2[k][j][i];
-                        Vec3[cols] = -sm3[k][j][i];
-                        Vec4[cols] = sm4[k][j][i];
-                        Vec5[cols] = -sm5[k][j][i];
-                    }
-
-                    if (cols > 1)
-                    {
-                        Vec0[cols] = Vec0[cols-1]*Vec1[cols-2] - Vec0[cols-2]*Vec1[cols-1];
-                        Vec1[cols] = Vec0[cols-1]*Vec2[cols-2] - Vec0[cols-2]*Vec2[cols-1];
-                        Vec2[cols] = Vec0[cols-1]*Vec3[cols-2] - Vec0[cols-2]*Vec3[cols-1];
-                        Vec3[cols] = Vec0[cols-1]*Vec4[cols-2] - Vec0[cols-2]*Vec4[cols-1];
-                        Vec4[cols] = Vec0[cols-1]*Vec5[cols-2] - Vec0[cols-2]*Vec5[cols-1];
-                        Vec5[cols] = 0.0;
-                    }
-
-                }
-
-                //next, find alphas, An, Bn, and then set Jacobian at each cell.
-
-                //set alpha
-                for (rows = 0; rows < 6; ++rows)
-                {
-                    if (rows == 0)
-                    {
-                        a[rows] = 0;
-                        //PetscPrintf(PETSC_COMM_WORLD, "\nalpha values: %f\n", a[rows]);
-                    }
-                    else
-                    {
-                        p1 = Vec0[rows + 1];
-                        p2 = Vec0[rows];
-                        p3 = Vec0[rows-1];
-
-                        if (p3 == 0)
+                        if (cols == 0)
                         {
-                            a[rows] == 0;
+                            Vec0[cols] = 1.0;
+                            Vec1[cols] = 0.0;
+                            Vec2[cols] = 0.0;
+                            Vec3[cols] = 0.0;
+                            Vec4[cols] = 0.0;
+                            Vec5[cols] = 0.0;
+                        }
+
+                        if (cols == 1)
+                        {
+                            Vec0[cols] = sm0[k][j][i];
+                            Vec1[cols] = -sm1[k][j][i];
+                            Vec2[cols] = sm2[k][j][i];
+                            Vec3[cols] = -sm3[k][j][i];
+                            Vec4[cols] = sm4[k][j][i];
+                            Vec5[cols] = -sm5[k][j][i];
+                        }
+
+                        if (cols > 1)
+                        {
+                            Vec0[cols] = Vec0[cols-1]*Vec1[cols-2] - Vec0[cols-2]*Vec1[cols-1];
+                            Vec1[cols] = Vec0[cols-1]*Vec2[cols-2] - Vec0[cols-2]*Vec2[cols-1];
+                            Vec2[cols] = Vec0[cols-1]*Vec3[cols-2] - Vec0[cols-2]*Vec3[cols-1];
+                            Vec3[cols] = Vec0[cols-1]*Vec4[cols-2] - Vec0[cols-2]*Vec4[cols-1];
+                            Vec4[cols] = Vec0[cols-1]*Vec5[cols-2] - Vec0[cols-2]*Vec5[cols-1];
+                            Vec5[cols] = 0.0;
+                        }
+
+                    }
+
+                    //next, find alphas, An, Bn, and then set Jacobian at each cell.
+
+                    //set alpha
+                    for (rows = 0; rows < 6; ++rows)
+                    {
+                        if (rows == 0)
+                        {
+                            a[rows] = 0;
+                            //PetscPrintf(PETSC_COMM_WORLD, "\nalpha values: %f\n", a[rows]);
                         }
                         else
                         {
-                            a[rows] = p1/(p2*p3);
-                            //PetscPrintf(PETSC_COMM_WORLD, "\nalpha values: %f\n", a[rows]);
+                            p1 = Vec0[rows + 1];
+                            p2 = Vec0[rows];
+                            p3 = Vec0[rows-1];
+
+                            if (p3 == 0)
+                            {
+                                a[rows] = 0;
+                            }
+                            else
+                            {
+                                a[rows] = p1/(p2*p3);
+                                //PetscPrintf(PETSC_COMM_WORLD, "\nalpha values: %f\n", a[rows]);
+                            }
+
+
+                        }
+
+                    }
+
+                    //set An and Bn
+                    for (n = 0; n < 3; ++n)
+                    {
+                        An[n] = a[2*n+1] + a[2*n];
+
+                        if (n < 2)
+                        {
+                            Bn[n] = sqrt(abs(a[2*n+2]*a[2*n+1]));
                         }
 
 
                     }
 
-                }
+                    //PetscPrintf(PETSC_COMM_WORLD, "\nJ values: %f, %f, %f, %f, %f\n", An[0], An[1], An[2], Bn[0], Bn[1]);
 
-                //set An and Bn
-                for (n = 0; n < 3; ++n)
+                    Eigen::Matrix3d A;
+                    A << An[0], Bn[0], 0,
+                    Bn[0], An[1], Bn[1],
+                    0, Bn[1], An[2];
+
+                    Eigen::EigenSolver<Eigen::Matrix3d> solver(A);
+                    Eigen::Vector3d realEigenvalues = solver.eigenvalues().real();       // Real parts of eigenvalues
+                    Eigen::Matrix3d realEigenvectors = solver.eigenvectors().real();     // Real parts of eigenvectors
+
+                    for (PetscInt eig = 0; eig < realEigenvectors.cols(); ++eig)
+                    {
+
+                        eigVecVal = realEigenvectors(0, eig);
+                        eigVal = realEigenvalues(eig);
+
+                        if (PetscIsInfOrNanReal(eigVecVal))
+                        {
+                            char error[512];
+                            sprintf(error, "EigenVecvalue %li is NaN or Inf: %f at %li %li %li", eig, eigVecVal, k, j, i);
+                            fatalErrorInFunction("UpdateWeightsAndAbscissi", error);
+                        }
+
+                        if (PetscIsInfOrNanReal(eigVal))
+                        {
+                            char error[512];
+                            sprintf(error, "EigenValue %li is NaN or Inf: %f at %li %li %li", eig, eigVal, k, j, i);
+                            fatalErrorInFunction("UpdateWeightsAndAbscissi", error);
+                        }
+
+                        if (eigVal < 0)
+                        {
+                            weight0[k][j][i] = 0.;
+                            weight1[k][j][i] = 0.;
+                            weight2[k][j][i] = 0.;
+
+                            absc0[k][j][i] = 0.;
+                            absc1[k][j][i] = 0.;
+                            absc2[k][j][i] = 0.;
+
+                            printf("\nWARNING NEGATIVE ABSCISSA DETECTED. Skipping sm sources terms at %li %li %li \n May need to lower CFL, use lower order scheme, lower GMD/GSD, or add more quadrature points", k, j, i);
+
+                            break;
+                        }
+
+                        if (eig == 0)
+                        {
+                            absc0[k][j][i] = eigVal;
+                            weight0[k][j][i] = pow(eigVecVal, 2) * Vec0[1];
+                            //printf("A0=%f, w0=%f\n",  absc0[k][j][i], weight0[k][j][i]);
+                        }
+                        else if (eig ==1)
+                        {
+                            absc1[k][j][i] = eigVal;
+                            weight1[k][j][i] = pow(eigVecVal, 2) * Vec0[1];
+                            //printf("A1=%f, w1=%f\n",  absc1[k][j][i], weight1[k][j][i]);
+                        }
+                        else if (eig == 2)
+                        {
+                            absc2[k][j][i] = eigVal;
+                            weight2[k][j][i] = pow(eigVecVal, 2) * Vec0[1];
+                            //printf("A2=%f, w2=%f\n",  absc2[k][j][i], weight2[k][j][i]);
+                        }
+                    }
+                }
+                /*else if (smObject->WaAMethod == "Stieltjes")
                 {
-                    An[n] = a[2*n+1] + a[2*n];
+                    // --- Begin Stieltjes Method for cell (i,j,k) ---
+                    PetscReal mu[6] = {sm0[k][j][i], sm1[k][j][i], sm2[k][j][i], sm3[k][j][i], sm4[k][j][i], sm5[k][j][i]};
 
-                    if (n < 2)
-                    {
-                        Bn[n] = sqrt(abs(a[2*n+2]*a[2*n+1]));
+                    if (mu[0] <= 1e-3 || isIBMSolidCell(k, j, i, nvert) || mu[0] > 10.0) {
+                        weight0[k][j][i] = weight1[k][j][i] = weight2[k][j][i] = 0.0;
+                        absc0[k][j][i] = absc1[k][j][i] = absc2[k][j][i] = 0.0;
+                        continue;
                     }
 
+                    std::vector<double> moments(mu, mu + 6);
+                    std::vector<double> absc(3), wts(3), alpha, beta;
 
-                }
+                    try {
+                        computeStieltjesQuadrature(moments, 3, absc, wts, alpha, beta);
+                    } catch (const std::exception& e) {
+                        printf("Stieltjes failure at %d %d %d: %s\n", k, j, i, e.what());
+                        absc0[k][j][i] = absc1[k][j][i] = absc2[k][j][i] = 0.0;
+                        weight0[k][j][i] = weight1[k][j][i] = weight2[k][j][i] = 0.0;
+                        continue;
+                    }
 
-                //PetscPrintf(PETSC_COMM_WORLD, "\nJ values: %f, %f, %f, %f, %f\n", An[0], An[1], An[2], Bn[0], Bn[1]);
+                    absc0[k][j][i] = absc[0]; absc1[k][j][i] = absc[1]; absc2[k][j][i] = absc[2];
+                    weight0[k][j][i] = wts[0]; weight1[k][j][i] = wts[1]; weight2[k][j][i] = wts[2];
 
-                Eigen::Matrix3d A;
-                A << An[0], Bn[0], 0,
-                Bn[0], An[1], Bn[1],
-                0, Bn[1], An[2];
+                    if(sm0[k][j][i] > 0)
+                    {
+                        printf("WaaaA %f %f %f %f %f %f\n", absc0[k][j][i], weight0[k][j][i], absc1[k][j][i], weight1[k][j][i], absc2[k][j][i], weight2[k][j][i]);
+                    }
 
-                Eigen::EigenSolver<Eigen::Matrix3d> solver(A);
-                Eigen::Vector3d realEigenvalues = solver.eigenvalues().real();       // Real parts of eigenvalues
-                Eigen::Matrix3d realEigenvectors = solver.eigenvectors().real();     // Real parts of eigenvectors
+                    for (PetscInt eig = 0; eig < 3; ++eig)
+                    {
+                        if (eig == 0)
+                        {
+                            if (PetscIsInfOrNanReal(absc0[k][j][i]))
+                            {
+                                char error[512];
+                                sprintf(error, "EigenVecvalue %li is NaN or Inf: %f at %li %li %li", eig, eigVecVal, k, j, i);
+                                fatalErrorInFunction("UpdateWeightsAndAbscissi", error);
+                            }
 
-                for (PetscInt eig = 0; eig < realEigenvectors.cols(); ++eig)
+                            if (PetscIsInfOrNanReal(weight0[k][j][i]))
+                            {
+                                char error[512];
+                                sprintf(error, "EigenValue %li is NaN or Inf: %f at %li %li %li", eig, eigVal, k, j, i);
+                                fatalErrorInFunction("UpdateWeightsAndAbscissi", error);
+                            }
+                            printf("A0=%f, w0=%f\n",  absc0[k][j][i], weight0[k][j][i]);
+
+                            if (absc0[k][j][i] < 0)
+                            {
+
+                                weight0[k][j][i] = 0.;
+                                weight1[k][j][i] = 0.;
+                                weight2[k][j][i] = 0.;
+
+                                absc0[k][j][i] = 0.;
+                                absc1[k][j][i] = 0.;
+                                absc2[k][j][i] = 0.;
+
+                                printf("\nWARNING NEGATIVE ABSCISSA DETECTED. Skipping sm sources terms at %li %li %li \n May need to lower CFL, use lower order scheme, lower GMD/GSD, or add more quadrature points", k, j, i);
+
+                                break;
+                            }
+                        }
+                        else if (eig ==1)
+                        {
+                            if (PetscIsInfOrNanReal(absc1[k][j][i]))
+                            {
+                                char error[512];
+                                sprintf(error, "EigenVecvalue %li is NaN or Inf: %f at %li %li %li", eig, eigVecVal, k, j, i);
+                                fatalErrorInFunction("UpdateWeightsAndAbscissi", error);
+                            }
+
+                            if (PetscIsInfOrNanReal(weight1[k][j][i]))
+                            {
+                                char error[512];
+                                sprintf(error, "EigenValue %li is NaN or Inf: %f at %li %li %li", eig, eigVal, k, j, i);
+                                fatalErrorInFunction("UpdateWeightsAndAbscissi", error);
+                            }
+                            printf("A0=%f, w0=%f\n",  absc0[k][j][i], weight0[k][j][i]);
+                            if (absc1[k][j][i] < 0)
+                            {
+
+                                weight0[k][j][i] = 0.;
+                                weight1[k][j][i] = 0.;
+                                weight2[k][j][i] = 0.;
+
+                                absc0[k][j][i] = 0.;
+                                absc1[k][j][i] = 0.;
+                                absc2[k][j][i] = 0.;
+
+                                printf("\nWARNING NEGATIVE ABSCISSA DETECTED. Skipping sm sources terms at %li %li %li \n May need to lower CFL, use lower order scheme, lower GMD/GSD, or add more quadrature points", k, j, i);
+
+                                break;
+                            }
+                        }
+                        else if (eig == 2)
+                        {
+                            if (PetscIsInfOrNanReal(absc2[k][j][i]))
+                            {
+                                char error[512];
+                                sprintf(error, "EigenVecvalue %li is NaN or Inf: %f at %li %li %li", eig, eigVecVal, k, j, i);
+                                fatalErrorInFunction("UpdateWeightsAndAbscissi", error);
+                            }
+
+                            if (PetscIsInfOrNanReal(weight2[k][j][i]))
+                            {
+                                char error[512];
+                                sprintf(error, "EigenValue %li is NaN or Inf: %f at %li %li %li", eig, eigVal, k, j, i);
+                                fatalErrorInFunction("UpdateWeightsAndAbscissi", error);
+                            }
+                            //printf("A0=%f, w0=%f\n",  absc0[k][j][i], weight0[k][j][i]);
+                            if (absc2[k][j][i] < 0)
+                            {
+
+                                weight0[k][j][i] = 0.;
+                                weight1[k][j][i] = 0.;
+                                weight2[k][j][i] = 0.;
+
+                                absc0[k][j][i] = 0.;
+                                absc1[k][j][i] = 0.;
+                                absc2[k][j][i] = 0.;
+
+                                printf("\nWARNING NEGATIVE ABSCISSA DETECTED. Skipping sm sources terms at %li %li %li \n May need to lower CFL, use lower order scheme, lower GMD/GSD, or add more quadrature points", k, j, i);
+
+                                break;
+                            }
+                        }
+                    }
+                    // --- End Stieltjes Method ---
+                }*/
+                else
                 {
-
-                    eigVecVal = realEigenvectors(0, eig);
-                    eigVal = realEigenvalues(eig);
-
-                    if (PetscIsInfOrNanReal(eigVecVal))
-                    {
-                        char error[512];
-                        sprintf(error, "EigenVecvalue %li is NaN or Inf: %f at %li %li %li", eig, eigVecVal, k, j, i);
-                        fatalErrorInFunction("UpdateWeightsAndAbscissi", error);
-                    }
-
-                    if (PetscIsInfOrNanReal(eigVal))
-                    {
-                        char error[512];
-                        sprintf(error, "EigenValue %li is NaN or Inf: %f at %li %li %li", eig, eigVal, k, j, i);
-                        fatalErrorInFunction("UpdateWeightsAndAbscissi", error);
-                    }
-
-                    if (eig == 0)
-                    {
-                        absc0[k][j][i] = eigVal;
-                        weight0[k][j][i] = pow(eigVecVal, 2) * Vec0[1];
-                        //printf("A0=%f, w0=%f\n",  absc0[k][j][i], weight0[k][j][i]);
-                    }
-                    else if (eig ==1)
-                    {
-                        absc1[k][j][i] = eigVal;
-                        weight1[k][j][i] = pow(eigVecVal, 2) * Vec0[1];
-                        //printf("A1=%f, w1=%f\n",  absc1[k][j][i], weight1[k][j][i]);
-                    }
-                    else if (eig == 2)
-                    {
-                        absc2[k][j][i] = eigVal;
-                        weight2[k][j][i] = pow(eigVecVal, 2) * Vec0[1];
-                        //printf("A2=%f, w2=%f\n",  absc2[k][j][i], weight2[k][j][i]);
-                    }
+                    char error[512];
+                    sprintf(error, "Only PD and Stieltjes available for WaAMethod");
+                    fatalErrorInFunction("UpdateWeightsAndAbscissi", error);
                 }
-
 
             }
         }
@@ -1142,12 +1480,6 @@ PetscErrorCode quickUpdateWeightsAndAbscissi(SMObj_ *smObject)
     DMDAVecRestoreArray(da, smObject->sm[5]->smVal, &sm5);
     //PetscPrintf(PETSC_COMM_WORLD, "mesh POST LOOP\n");
 
-    for (PetscInt ii = 0; ii < smObject->sm[0]->access->flags->isScalarMomentsActive; ii++)
-    {
-        DMGlobalToLocalBegin(mesh->da, smObject->sm[ii]->smVal, INSERT_VALUES, smObject->sm[ii]->lsmVal);
-        DMGlobalToLocalEnd(mesh->da, smObject->sm[ii]->smVal, INSERT_VALUES, smObject->sm[ii]->lsmVal);
-    }
-
     DMDAVecRestoreArray(da, smObject->weightAbsc[0]->weight, &weight0);
     DMDAVecRestoreArray(da, smObject->weightAbsc[0]->absc, &absc0);
     DMDAVecRestoreArray(da, smObject->weightAbsc[1]->weight, &weight1);
@@ -1156,6 +1488,7 @@ PetscErrorCode quickUpdateWeightsAndAbscissi(SMObj_ *smObject)
     DMDAVecRestoreArray(da, smObject->weightAbsc[2]->absc, &absc2);
 
     DMDAVecRestoreArray(da,  mesh->lNvert, &nvert);
+    DMDAVecRestoreArray(da,  mesh->ventMarkers, &markVent);
 
     VecDestroy(&alpha);
     VecDestroy(&an);
@@ -1168,6 +1501,7 @@ PetscErrorCode quickUpdateWeightsAndAbscissi(SMObj_ *smObject)
     VecDestroy(&vec4);
     VecDestroy(&vec5);
 
+    findTauP(smObject);
 
     return 0;
 }
@@ -1406,14 +1740,9 @@ PetscErrorCode infectProb(SMObj_ *smObject)
                }
 
                meanD = sm_1[k][j][i]/sm[k][j][i];
-               Quant[k][j][i] = sm[k][j][i]*smObject->OGConc*meanD*meanD*meanD*(M_PI/6)*pow(10, 7)*pow(10, -12)/130/210;
-               dq[k][j][i] += 0.0004166667*Quant[k][j][i]*clock->dt;
+               Quant[k][j][i] = sm[k][j][i]*smObject->OGConc*meanD*meanD*meanD*(M_PI/6)*pow(10, 10)*pow(10, -12)/130/210;
+               dq[k][j][i] += smObject->IR*Quant[k][j][i]*clock->dt;  //0.000648, 0.000432
                ProbI[k][j][i] = 1 - exp(-dq[k][j][i]);
-
-               if (sm[k][j][i] > 1e-6)
-               {
-                    //printf("%f, %f, %f, %f, %f, %f\n", meanD, sm[k][j][i], smObject->OGConc, 10000000000*Quant[k][j][i], dq[k][j][i], ProbI[k][j][i]);
-               }
 
             }
         }
@@ -1945,16 +2274,12 @@ PetscErrorCode formDepSourceExp(sm_ *sm, PetscInt ii)
 
     PetscReal     tauWall, gradNorm, yPlus, temp;
     PetscReal     Ip0, Ip1, Ip2, uDep0, uDep1, uDep2;
-    PetscReal     TauP0, TauP1, TauP2, TauP0Plus, TauP1Plus, TauP2Plus;
-    PetscReal     Cu0, Cu1, Cu2, expMfp0, expMfp1, expMfp2;
+    PetscReal     TauP0Plus, TauP1Plus, TauP2Plus;
     PetscReal     gPlus0, gPlus1, gPlus2, ustarCont, ustarMag;
 
     PetscReal     ***sm_o;
     PetscReal     ***weight0, ***absc0, ***weight1, ***absc1, ***weight2, ***absc2;
-    PetscReal     ***tmprt;
-
-    PetscScalar   mfp;
-    PetscReal     k_b = 1.380649E-23; //*1E18; //boltzman constant in kg*nm^2/(K*s^2)
+    PetscReal     ***TauP0, ***TauP1, ***TauP2;
 
     PetscInt      i1, j1, k1;
 
@@ -1973,6 +2298,10 @@ PetscErrorCode formDepSourceExp(sm_ *sm, PetscInt ii)
     DMDAVecGetArray(da, smObject->weightAbsc[1]->absc, &absc1);
     DMDAVecGetArray(da, smObject->weightAbsc[2]->weight, &weight2);
     DMDAVecGetArray(da, smObject->weightAbsc[2]->absc, &absc2);
+
+    DMDAVecGetArray(da, smObject->weightAbsc[0]->tauP, &TauP0);
+    DMDAVecGetArray(da, smObject->weightAbsc[1]->tauP, &TauP1);
+    DMDAVecGetArray(da, smObject->weightAbsc[2]->tauP, &TauP2);
 
     VecSet(smObject->sm[ii]->Dep, 0.0);
     DMDAVecGetArray(fda, smObject->sm[ii]->Dep, &dep);
@@ -2008,7 +2337,7 @@ PetscErrorCode formDepSourceExp(sm_ *sm, PetscInt ii)
             {
 
                 //don't apply any depsition at vents or solid IBm cells
-               if (markVent[k][j][i] > 0 || isIBMSolidCell(k, j, i, nvert))
+               if ((markVent[k][j][i] > 0 && !isIBMFluidCell(k, j, i, nvert)) || isIBMSolidCell(k, j, i, nvert))
                {
                     continue;
                }
@@ -2069,37 +2398,9 @@ PetscErrorCode formDepSourceExp(sm_ *sm, PetscInt ii)
                        ustar.z * icsi[k][j][i].z
                    );
 
-                   if (sm->access->flags->isTeqnActive)
-                   {
-                       DMDAVecGetArray(da, sm->access->teqn->lTmprt, &tmprt);
-
-                       temp = tmprt[k][j][i]; // need to get at face value??
-
-                       DMDAVecRestoreArray(da, sm->access->teqn->lTmprt, &tmprt);
-                   }
-                   else
-                   {
-                       temp = cst->tRef; //need at face??
-                   }
-
-                   mfp = pow(10, 6)*((k_b)*temp/(sqrt(2)*M_PI*3.46E-10*3.46E-10*101325)); // mfp in um
-
-                   //note all WaA value are at center, but since the boundary condition at all locations where Deposition is applicable is ZG, this is equivalent to face values/
-                   expMfp0 = exp(-0.88/(2*mfp/(absc0[k][j][i])));
-                   expMfp1 = exp(-0.88/(2*mfp/(absc1[k][j][i])));
-                   expMfp2 = exp(-0.88/(2*mfp/(absc2[k][j][i])));
-
-                   Cu0 = (1 + 2*mfp*(1.2+0.4*expMfp0)/(absc0[k][j][i]));
-                   Cu1 = (1 + 2*mfp*(1.2+0.4*expMfp1)/(absc1[k][j][i]));
-                   Cu2 = (1 + 2*mfp*(1.2+0.4*expMfp2)/(absc2[k][j][i]));
-
-                   TauP0 = pow(10, -12)*absc0[k][j][i]*absc0[k][j][i]*smObject->rhoPart*Cu0/(18*cst->nu*cst->rho);
-                   TauP1 = pow(10, -12)*absc1[k][j][i]*absc1[k][j][i]*smObject->rhoPart*Cu1/(18*cst->nu*cst->rho);
-                   TauP2 = pow(10, -12)*absc2[k][j][i]*absc2[k][j][i]*smObject->rhoPart*Cu2/(18*cst->nu*cst->rho);
-
-                   TauP0Plus = (TauP0 * pow(ustarMag, 2))/cst->nu;
-                   TauP1Plus = (TauP1 * pow(ustarMag, 2))/cst->nu;
-                   TauP2Plus = (TauP0 * pow(ustarMag, 2))/cst->nu;
+                   TauP0Plus = (TauP0[k][j][i] * pow(ustarMag, 2))/cst->nu;
+                   TauP1Plus = (TauP1[k][j][i] * pow(ustarMag, 2))/cst->nu;
+                   TauP2Plus = (TauP2[k][j][i] * pow(ustarMag, 2))/cst->nu;
 
                    //depositon regimes from nerisson et al.
                    if ((TauP0Plus + TauP1Plus + TauP2Plus)/3. < 0.1)
@@ -2195,37 +2496,9 @@ PetscErrorCode formDepSourceExp(sm_ *sm, PetscInt ii)
 
                    //printf("\n%f, %li, %li, %li, %f, %f, %f\n", ustarCont, k, j, i, ustar.x, ustar.y, ustar.z);
 
-                   if (sm->access->flags->isTeqnActive)
-                   {
-                       DMDAVecGetArray(da, sm->access->teqn->lTmprt, &tmprt);
-
-                       temp = tmprt[k][j][i]; // need to get at face value??
-
-                       DMDAVecRestoreArray(da, sm->access->teqn->lTmprt, &tmprt);
-                   }
-                   else
-                   {
-                       temp = cst->tRef; //need at face??
-                   }
-
-                   mfp = pow(10, 6)*((k_b)*temp/(sqrt(2)*M_PI*3.46E-10*3.46E-10*101325)); // mfp in um
-
-                   //note all WaA value are at center, but since the boundary condition at all locations where Deposition is applicable is ZG, this is equivalent to face values/
-                   expMfp0 = exp(-0.88/(2*mfp/(absc0[k][j][i])));
-                   expMfp1 = exp(-0.88/(2*mfp/(absc1[k][j][i])));
-                   expMfp2 = exp(-0.88/(2*mfp/(absc2[k][j][i])));
-
-                   Cu0 = (1 + 2*mfp*(1.2+0.4*expMfp0)/(absc0[k][j][i]));
-                   Cu1 = (1 + 2*mfp*(1.2+0.4*expMfp1)/(absc1[k][j][i]));
-                   Cu2 = (1 + 2*mfp*(1.2+0.4*expMfp2)/(absc2[k][j][i]));
-
-                   TauP0 = pow(10, -12)*absc0[k][j][i]*absc0[k][j][i]*smObject->rhoPart*Cu0/(18*cst->nu*cst->rho);
-                   TauP1 = pow(10, -12)*absc1[k][j][i]*absc1[k][j][i]*smObject->rhoPart*Cu1/(18*cst->nu*cst->rho);
-                   TauP2 = pow(10, -12)*absc2[k][j][i]*absc2[k][j][i]*smObject->rhoPart*Cu2/(18*cst->nu*cst->rho);
-
-                   TauP0Plus = (TauP0 * pow(ustarMag, 2))/cst->nu;
-                   TauP1Plus = (TauP1 * pow(ustarMag, 2))/cst->nu;
-                   TauP2Plus = (TauP0 * pow(ustarMag, 2))/cst->nu;
+                   TauP0Plus = (TauP0[k][j][i] * pow(ustarMag, 2))/cst->nu;
+                   TauP1Plus = (TauP1[k][j][i] * pow(ustarMag, 2))/cst->nu;
+                   TauP2Plus = (TauP2[k][j][i] * pow(ustarMag, 2))/cst->nu;
 
                    if ((TauP0Plus + TauP1Plus + TauP2Plus)/3. < 0.1)
                    {
@@ -2320,36 +2593,9 @@ PetscErrorCode formDepSourceExp(sm_ *sm, PetscInt ii)
                        ustar.z * jeta[k][j][i].z
                    );
 
-                   if (sm->access->flags->isTeqnActive)
-                   {
-                       DMDAVecGetArray(da, sm->access->teqn->lTmprt, &tmprt);
-
-                       temp = tmprt[k][j][i]; // need to get at face value??
-
-                       DMDAVecRestoreArray(da, sm->access->teqn->lTmprt, &tmprt);
-                   }
-                   else
-                   {
-                       temp = cst->tRef; //need at face??
-                   }
-
-                   mfp = pow(10, 6)*((k_b)*temp/(sqrt(2)*M_PI*3.46E-10*3.46E-10*101325)); // mfp in um
-
-                   expMfp0 = exp(-0.88/(2*mfp/(absc0[k][j][i])));
-                   expMfp1 = exp(-0.88/(2*mfp/(absc1[k][j][i])));
-                   expMfp2 = exp(-0.88/(2*mfp/(absc2[k][j][i])));
-
-                   Cu0 = (1 + 2*mfp*(1.2+0.4*expMfp0)/(absc0[k][j][i]));
-                   Cu1 = (1 + 2*mfp*(1.2+0.4*expMfp1)/(absc1[k][j][i]));
-                   Cu2 = (1 + 2*mfp*(1.2+0.4*expMfp2)/(absc2[k][j][i]));
-
-                   TauP0 = pow(10, -12)*absc0[k][j][i]*absc0[k][j][i]*smObject->rhoPart*Cu0/(18*cst->nu*cst->rho);
-                   TauP1 = pow(10, -12)*absc1[k][j][i]*absc1[k][j][i]*smObject->rhoPart*Cu1/(18*cst->nu*cst->rho);
-                   TauP2 = pow(10, -12)*absc2[k][j][i]*absc2[k][j][i]*smObject->rhoPart*Cu2/(18*cst->nu*cst->rho);
-
-                   TauP0Plus = (TauP0 * pow(ustarMag, 2))/cst->nu;
-                   TauP1Plus = (TauP1 * pow(ustarMag, 2))/cst->nu;
-                   TauP2Plus = (TauP0 * pow(ustarMag, 2))/cst->nu;
+                   TauP0Plus = (TauP0[k][j][i] * pow(ustarMag, 2))/cst->nu;
+                   TauP1Plus = (TauP1[k][j][i] * pow(ustarMag, 2))/cst->nu;
+                   TauP2Plus = (TauP2[k][j][i] * pow(ustarMag, 2))/cst->nu;
 
                    if ((TauP0Plus + TauP1Plus + TauP2Plus)/3. < 0.1)
                    {
@@ -2383,9 +2629,9 @@ PetscErrorCode formDepSourceExp(sm_ *sm, PetscInt ii)
 
                    if (ustarMag > 0)
                    {
-                       gPlus0 = 9.81*TauP0/ustarMag;
-                       gPlus1 = 9.81*TauP1/ustarMag;
-                       gPlus2 = 9.81*TauP2/ustarMag;
+                       gPlus0 = 9.81*TauP0[k][j][i]/ustarMag;
+                       gPlus1 = 9.81*TauP1[k][j][i]/ustarMag;
+                       gPlus2 = 9.81*TauP2[k][j][i]/ustarMag;
                    }
                    else
                    {
@@ -2474,36 +2720,9 @@ PetscErrorCode formDepSourceExp(sm_ *sm, PetscInt ii)
 
                    //printf("\n%f, %li, %li, %li, %f, %f, %f\n", ustarCont, k, j, i, ustar.x, ustar.y, ustar.z);
 
-                   if (sm->access->flags->isTeqnActive)
-                   {
-                       DMDAVecGetArray(da, sm->access->teqn->lTmprt, &tmprt);
-
-                       temp = tmprt[k][j][i]; // need to get at face value??
-
-                       DMDAVecRestoreArray(da, sm->access->teqn->lTmprt, &tmprt);
-                   }
-                   else
-                   {
-                       temp = cst->tRef; //need at face??
-                   }
-
-                   mfp = pow(10, 6)*((k_b)*temp/(sqrt(2)*M_PI*3.46E-10*3.46E-10*101325)); // mfp in um
-
-                   expMfp0 = exp(-0.88/(2*mfp/(absc0[k][j][i])));
-                   expMfp1 = exp(-0.88/(2*mfp/(absc1[k][j][i])));
-                   expMfp2 = exp(-0.88/(2*mfp/(absc2[k][j][i])));
-
-                   Cu0 = (1 + 2*mfp*(1.2+0.4*expMfp0)/(absc0[k][j][i]));
-                   Cu1 = (1 + 2*mfp*(1.2+0.4*expMfp1)/(absc1[k][j][i]));
-                   Cu2 = (1 + 2*mfp*(1.2+0.4*expMfp2)/(absc2[k][j][i]));
-
-                   TauP0 = pow(10, -12)*absc0[k][j][i]*absc0[k][j][i]*smObject->rhoPart*Cu0/(18*cst->nu*cst->rho);
-                   TauP1 = pow(10, -12)*absc1[k][j][i]*absc1[k][j][i]*smObject->rhoPart*Cu1/(18*cst->nu*cst->rho);
-                   TauP2 = pow(10, -12)*absc2[k][j][i]*absc2[k][j][i]*smObject->rhoPart*Cu2/(18*cst->nu*cst->rho);
-
-                   TauP0Plus = (TauP0 * pow(ustarMag, 2))/cst->nu;
-                   TauP1Plus = (TauP1 * pow(ustarMag, 2))/cst->nu;
-                   TauP2Plus = (TauP0 * pow(ustarMag, 2))/cst->nu;
+                   TauP0Plus = (TauP0[k][j][i] * pow(ustarMag, 2))/cst->nu;
+                   TauP1Plus = (TauP1[k][j][i] * pow(ustarMag, 2))/cst->nu;
+                   TauP2Plus = (TauP2[k][j][i] * pow(ustarMag, 2))/cst->nu;
 
                    if ((TauP0Plus + TauP1Plus + TauP2Plus)/3. < 0.1)
                    {
@@ -2537,9 +2756,9 @@ PetscErrorCode formDepSourceExp(sm_ *sm, PetscInt ii)
 
                    if (ustarMag > 0)
                    {
-                       gPlus0 = 9.81*TauP0/ustarMag;
-                       gPlus1 = 9.81*TauP1/ustarMag;
-                       gPlus2 = 9.81*TauP2/ustarMag;
+                       gPlus0 = 9.81*TauP0[k][j][i]/ustarMag;
+                       gPlus1 = 9.81*TauP1[k][j][i]/ustarMag;
+                       gPlus2 = 9.81*TauP2[k][j][i]/ustarMag;
                    }
                    else
                    {
@@ -2632,36 +2851,9 @@ PetscErrorCode formDepSourceExp(sm_ *sm, PetscInt ii)
 
                    //printf("\n%f, %li, %li, %li, %f, %f, %f\n", ustarCont, k, j, i, ustar.x, ustar.y, ustar.z);
 
-                   if (sm->access->flags->isTeqnActive)
-                   {
-                       DMDAVecGetArray(da, sm->access->teqn->lTmprt, &tmprt);
-
-                       temp = tmprt[k][j][i]; // need to get at face value??
-
-                       DMDAVecRestoreArray(da, sm->access->teqn->lTmprt, &tmprt);
-                   }
-                   else
-                   {
-                       temp = cst->tRef; //need at face??
-                   }
-
-                   mfp = pow(10, 6)*((k_b)*temp/(sqrt(2)*M_PI*3.46E-10*3.46E-10*101325)); // mfp in um
-
-                   expMfp0 = exp(-0.88/(2*mfp/(absc0[k][j][i])));
-                   expMfp1 = exp(-0.88/(2*mfp/(absc1[k][j][i])));
-                   expMfp2 = exp(-0.88/(2*mfp/(absc2[k][j][i])));
-
-                   Cu0 = (1 + 2*mfp*(1.2+0.4*expMfp0)/(absc0[k][j][i]));
-                   Cu1 = (1 + 2*mfp*(1.2+0.4*expMfp1)/(absc1[k][j][i]));
-                   Cu2 = (1 + 2*mfp*(1.2+0.4*expMfp2)/(absc2[k][j][i]));
-
-                   TauP0 = pow(10, -12)*absc0[k][j][i]*absc0[k][j][i]*smObject->rhoPart*Cu0/(18*cst->nu*cst->rho);
-                   TauP1 = pow(10, -12)*absc1[k][j][i]*absc1[k][j][i]*smObject->rhoPart*Cu1/(18*cst->nu*cst->rho);
-                   TauP2 = pow(10, -12)*absc2[k][j][i]*absc2[k][j][i]*smObject->rhoPart*Cu2/(18*cst->nu*cst->rho);
-
-                   TauP0Plus = (TauP0* pow(ustarMag, 2))/cst->nu;
-                   TauP1Plus = (TauP1 * pow(ustarMag, 2))/cst->nu;
-                   TauP2Plus = (TauP0 * pow(ustarMag, 2))/cst->nu;
+                   TauP0Plus = (TauP0[k][j][i] * pow(ustarMag, 2))/cst->nu;
+                   TauP1Plus = (TauP1[k][j][i] * pow(ustarMag, 2))/cst->nu;
+                   TauP2Plus = (TauP2[k][j][i] * pow(ustarMag, 2))/cst->nu;
 
                    if ((TauP0Plus + TauP1Plus + TauP2Plus)/3. < 0.1)
                    {
@@ -2757,36 +2949,9 @@ PetscErrorCode formDepSourceExp(sm_ *sm, PetscInt ii)
 
                    //printf("\n%f, %li, %li, %li, %f, %f, %f\n", ustarCont, k, j, i, ustar.x, ustar.y, ustar.z);
 
-                   if (sm->access->flags->isTeqnActive)
-                   {
-                       DMDAVecGetArray(da, sm->access->teqn->lTmprt, &tmprt);
-
-                       temp = tmprt[k][j][i]; // need to get at face value??
-
-                       DMDAVecRestoreArray(da, sm->access->teqn->lTmprt, &tmprt);
-                   }
-                   else
-                   {
-                       temp = cst->tRef; //need at face??
-                   }
-
-                   mfp = pow(10, 6)*((k_b)*temp/(sqrt(2)*M_PI*3.46E-10*3.46E-10*101325)); // mfp in um
-
-                   expMfp0 = exp(-0.88/(2*mfp/(absc0[k][j][i])));
-                   expMfp1 = exp(-0.88/(2*mfp/(absc1[k][j][i])));
-                   expMfp2 = exp(-0.88/(2*mfp/(absc2[k][j][i])));
-
-                   Cu0 = (1 + 2*mfp*(1.2+0.4*expMfp0)/(absc0[k][j][i]));
-                   Cu1 = (1 + 2*mfp*(1.2+0.4*expMfp1)/(absc1[k][j][i]));
-                   Cu2 = (1 + 2*mfp*(1.2+0.4*expMfp2)/(absc2[k][j][i]));
-
-                   TauP0 = pow(10, -12)*absc0[k][j][i]*absc0[k][j][i]*smObject->rhoPart*Cu0/(18*cst->nu*cst->rho);
-                   TauP1 = pow(10, -12)*absc1[k][j][i]*absc1[k][j][i]*smObject->rhoPart*Cu1/(18*cst->nu*cst->rho);
-                   TauP2 = pow(10, -12)*absc2[k][j][i]*absc2[k][j][i]*smObject->rhoPart*Cu2/(18*cst->nu*cst->rho);
-
-                   TauP0Plus = (TauP0* pow(ustarMag, 2))/cst->nu;
-                   TauP1Plus = (TauP1 * pow(ustarMag, 2))/cst->nu;
-                   TauP2Plus = (TauP0 * pow(ustarMag, 2))/cst->nu;
+                   TauP0Plus = (TauP0[k][j][i] * pow(ustarMag, 2))/cst->nu;
+                   TauP1Plus = (TauP1[k][j][i] * pow(ustarMag, 2))/cst->nu;
+                   TauP2Plus = (TauP2[k][j][i] * pow(ustarMag, 2))/cst->nu;
 
                    if ((TauP0Plus + TauP1Plus + TauP2Plus)/3. < 0.1)
                    {
@@ -2874,6 +3039,10 @@ PetscErrorCode formDepSourceExp(sm_ *sm, PetscInt ii)
     DMDAVecRestoreArray(da, smObject->weightAbsc[1]->absc, &absc1);
     DMDAVecRestoreArray(da, smObject->weightAbsc[2]->weight, &weight2);
     DMDAVecRestoreArray(da, smObject->weightAbsc[2]->absc, &absc2);
+
+    DMDAVecRestoreArray(da, smObject->weightAbsc[0]->tauP, &TauP0);
+    DMDAVecRestoreArray(da, smObject->weightAbsc[1]->tauP, &TauP1);
+    DMDAVecRestoreArray(da, smObject->weightAbsc[2]->tauP, &TauP2);
 
     DMDAVecRestoreArray(da, mesh->lNvert, &nvert);
 
@@ -2989,18 +3158,10 @@ PetscErrorCode sedFluxSM(sm_ *sm, Vec &Rhs, PetscReal scale, PetscInt ii)
     PetscInt      i, j, k;
     PetscInt      lxs, lxe, lys, lye, lzs, lze;
 
-    PetscReal     temp;
-    PetscReal     mfp;
-    PetscReal     m3Dia;
-    PetscReal     expMfp0, expMfp1, expMfp2;
-    PetscReal     Cu0, Cu1, Cu2;
-
     PetscInt    iL, iR, jL, jR, kL, kR;
     PetscReal   denom;
 
     PetscInt      ***markVent;
-
-    PetscReal     k_b = 1.380649E-23; //*1E18; //boltzman constant in kg*nm^2/(K*s^2)
 
     Cmpnts        gravity;
                   gravity.x = 0;
@@ -3104,39 +3265,9 @@ PetscErrorCode sedFluxSM(sm_ *sm, Vec &Rhs, PetscReal scale, PetscInt ii)
                     continue;
                 }
 
-                if (sm->access->flags->isTeqnActive)
-                {
-                    DMDAVecGetArray(da, sm->access->teqn->lTmprt, &tmprt);
-
-                    temp = tmprt[k][j][i]; // need to get at face value??
-
-                    DMDAVecRestoreArray(da, sm->access->teqn->lTmprt, &tmprt);
-                }
-                else
-                {
-                    temp = Cst->tRef; //need at face??
-                }
-
-                mfp = pow(10, 6)*((k_b)*temp/(sqrt(2)*M_PI*3.46E-10*3.46E-10*101325)); // mfp in um
-
-                //m3Dia = sm4[k][j][i]/sm3[k][j][i];
-
-                expMfp0 = exp(-0.88/(2*mfp/(absc0[k][j][i])));
-                expMfp1 = exp(-0.88/(2*mfp/(absc1[k][j][i])));
-                expMfp2 = exp(-0.88/(2*mfp/(absc2[k][j][i])));
-
-                Cu0 = (1 + 2*mfp*(1.2+0.4*expMfp0)/(absc0[k][j][i]));
-                Cu1 = (1 + 2*mfp*(1.2+0.4*expMfp1)/(absc1[k][j][i]));
-                Cu2 = (1 + 2*mfp*(1.2+0.4*expMfp2)/(absc2[k][j][i]));
-
-                TauP0[k][j][i] = pow(10, -12)*absc0[k][j][i]*absc0[k][j][i]*smObject->rhoPart*Cu0/(18*Cst->nu*Cst->rho);
-                TauP1[k][j][i] = pow(10, -12)*absc1[k][j][i]*absc1[k][j][i]*smObject->rhoPart*Cu1/(18*Cst->nu*Cst->rho);
-                TauP2[k][j][i] = pow(10, -12)*absc2[k][j][i]*absc2[k][j][i]*smObject->rhoPart*Cu2/(18*Cst->nu*Cst->rho);
-
                 sedCent[k][j][i]
                 =
                 (TauP0[k][j][i]*weight0[k][j][i]*pow(absc0[k][j][i], ii)  +  TauP1[k][j][i]*weight1[k][j][i]*pow(absc1[k][j][i], ii) +  TauP2[k][j][i]*weight2[k][j][i]*pow(absc2[k][j][i], ii));
-
 
             }
         }
@@ -3331,12 +3462,6 @@ PetscErrorCode devFluxSM(sm_ *sm, Vec &Rhs, PetscReal scale, PetscInt ii)
     PetscInt      i, j, k;
     PetscInt      lxs, lxe, lys, lye, lzs, lze;
 
-    PetscReal     temp;
-    PetscReal     mfp;
-    PetscReal     m3Dia;
-    PetscReal     expMfp0, expMfp1, expMfp2;
-    PetscReal     Cu0, Cu1, Cu2;
-
     PetscInt    iL, iR, jL, jR, kL, kR;
     PetscReal   denom;
 
@@ -3354,8 +3479,6 @@ PetscErrorCode devFluxSM(sm_ *sm, Vec &Rhs, PetscReal scale, PetscInt ii)
     PetscReal     ***iaj, ***jaj, ***kaj, ***aj;
 
     PetscInt      ***markVent;
-
-    PetscReal     k_b = 1.380649E-23; //*1E18; //boltzman constant in kg*nm^2/(K*s^2)
 
     Cmpnts        ***ucat, ***ucat_o, matDer, matDerCont;
 
@@ -3422,35 +3545,6 @@ PetscErrorCode devFluxSM(sm_ *sm, Vec &Rhs, PetscReal scale, PetscInt ii)
                 {
                     continue;
                 }
-
-                if (sm->access->flags->isTeqnActive)
-                {
-                    DMDAVecGetArray(da, sm->access->teqn->lTmprt, &tmprt);
-
-                    temp = tmprt[k][j][i]; // need to get at face value??
-
-                    DMDAVecRestoreArray(da, sm->access->teqn->lTmprt, &tmprt);
-                }
-                else
-                {
-                    temp = Cst->tRef; //need at face??
-                }
-
-                mfp = pow(10, 6)*((k_b)*temp/(sqrt(2)*M_PI*3.46E-10*3.46E-10*101325)); // mfp in um
-
-                //m3Dia = sm4[k][j][i]/sm3[k][j][i];
-
-                expMfp0 = exp(-0.88/(2*mfp/(absc0[k][j][i])));
-                expMfp1 = exp(-0.88/(2*mfp/(absc1[k][j][i])));
-                expMfp2 = exp(-0.88/(2*mfp/(absc2[k][j][i])));
-
-                Cu0 = (1 + 2*mfp*(1.2+0.4*expMfp0)/(absc0[k][j][i]));
-                Cu1 = (1 + 2*mfp*(1.2+0.4*expMfp1)/(absc1[k][j][i]));
-                Cu2 = (1 + 2*mfp*(1.2+0.4*expMfp2)/(absc2[k][j][i]));
-
-                TauP0[k][j][i] = pow(10, -12)*absc0[k][j][i]*absc0[k][j][i]*smObject->rhoPart*Cu0/(18*Cst->nu*Cst->rho);
-                TauP1[k][j][i] = pow(10, -12)*absc1[k][j][i]*absc1[k][j][i]*smObject->rhoPart*Cu1/(18*Cst->nu*Cst->rho);
-                TauP2[k][j][i] = pow(10, -12)*absc2[k][j][i]*absc2[k][j][i]*smObject->rhoPart*Cu2/(18*Cst->nu*Cst->rho);
 
                 devCent[k][j][i]
                 =
@@ -3529,7 +3623,7 @@ PetscErrorCode devFluxSM(sm_ *sm, Vec &Rhs, PetscReal scale, PetscInt ii)
                     =
                     -
                     (
-                        matDerCont.x * upwind(lDevCent[k][j][i], lDevCent[k][j][i+1], k, j, i, ucont[k][j][i].x)
+                        matDerCont.x * upwind(lDevCent[k][j][i], lDevCent[k][j][i+1], ucont[k][j][i].x)
                     );
                 }
 
@@ -3580,7 +3674,7 @@ PetscErrorCode devFluxSM(sm_ *sm, Vec &Rhs, PetscReal scale, PetscInt ii)
                     =
                     -
                     (
-                        matDerCont.y * upwind(lDevCent[k][j][i], lDevCent[k][j+1][i], k, j, i, ucont[k][j][i].y)
+                        matDerCont.y * upwind(lDevCent[k][j][i], lDevCent[k][j+1][i], ucont[k][j][i].y)
                     );
                 }
 
@@ -3631,7 +3725,7 @@ PetscErrorCode devFluxSM(sm_ *sm, Vec &Rhs, PetscReal scale, PetscInt ii)
                     =
                     -
                     (
-                        matDerCont.z * upwind(lDevCent[k][j][i], lDevCent[k+1][j][i], k, j, i, ucont[k][j][i].z)
+                        matDerCont.z * upwind(lDevCent[k][j][i], lDevCent[k+1][j][i], ucont[k][j][i].z)
                     );
                 }
 
@@ -3739,3 +3833,300 @@ PetscErrorCode devFluxSM(sm_ *sm, Vec &Rhs, PetscReal scale, PetscInt ii)
 
     return(0);
 }
+
+//***************************************************************************************************************//
+
+PetscErrorCode resetNegScalars(sm_ *sm, PetscInt ii)
+{
+    mesh_          *mesh = sm->access->mesh; //just needs to use the access from any sm, sm[0] will always be available if sm flag is 1 or greater.
+
+    DM             da = mesh->da;
+
+    DMDALocalInfo info = mesh->info;
+    PetscInt      xs   = info.xs, xe = info.xs + info.xm;
+    PetscInt      ys   = info.ys, ye = info.ys + info.ym;
+    PetscInt      zs   = info.zs, ze = info.zs + info.zm;
+    PetscInt      mx   = info.mx, my = info.my, mz = info.mz;
+
+    PetscInt      lxs, lxe, lys, lye, lzs, lze;
+    PetscInt      i, j, k;
+
+    PetscReal     ***smVal, ***smTmp, ***sm_o;
+
+    lxs = xs; lxe = xe; if (xs==0) lxs = xs+1; if (xe==mx) lxe = xe-1;
+    lys = ys; lye = ye; if (ys==0) lys = ys+1; if (ye==my) lye = ye-1;
+    lzs = zs; lze = ze; if (zs==0) lzs = zs+1; if (ze==mz) lze = ze-1;
+
+    DMDAVecGetArray(da, sm->smVal, &smVal);
+    DMDAVecGetArray(da, sm->sm_o, &sm_o);
+    DMDAVecGetArray(da, sm->smTmp, &smTmp);
+
+    //loop to all cells
+    for (k=lzs; k<lze; k++)
+    {
+        for (j=lys; j<lye; j++)
+        {
+            for (i=lxs; i<lxe; i++)
+            {
+
+                if (smVal[k][j][i] < 0)
+                {
+                    smVal[k][j][i] = 0;
+                }
+
+                if (sm_o[k][j][i] < 0)
+                {
+                    sm_o[k][j][i] = 0;
+                }
+
+                if (smTmp[k][j][i] < 0)
+                {
+                    smTmp[k][j][i] = 0;
+                }
+
+                if( PetscIsInfOrNanReal(smVal[k][j][i]) )
+                {
+                    char error[512];
+                    sprintf(error, "NAN detected at %li %li %li! Try different discretization or lowering CFL", k, j, i);
+                    fatalErrorInFunction("resetNegScalars", error);
+                }
+
+                if( smVal[k][j][i] > 1000 && ii == 0)
+                {
+                    char error[512];
+                    sprintf(error, "Unphysical SM (<1000) detected at %li %li %li!", k, j, i);
+                    fatalErrorInFunction("resetNegScalars", error);
+                }
+            }
+        }
+    }
+
+    DMDAVecRestoreArray(da, sm->smVal, &smVal);
+    DMDAVecRestoreArray(da, sm->sm_o, &sm_o);
+    DMDAVecRestoreArray(da, sm->smTmp, &smTmp);
+
+    // scatter scalarMoment from global to local
+    DMGlobalToLocalBegin(mesh->da, sm->smVal, INSERT_VALUES, sm->lsmVal);
+    DMGlobalToLocalEnd  (mesh->da, sm->smVal, INSERT_VALUES, sm->lsmVal);
+
+    // scatter scalarMoment from global to local
+    DMGlobalToLocalBegin(mesh->da, sm->sm_o, INSERT_VALUES, sm->lsm_o);
+    DMGlobalToLocalEnd  (mesh->da, sm->sm_o, INSERT_VALUES, sm->lsm_o);
+
+    return 0;
+}
+
+//***************************************************************************************************************//
+
+PetscErrorCode findTauP(SMObj_ *smObject)
+{
+    flags_        *flags = smObject->sm[0]->access->flags;
+    mesh_         *mesh  = smObject->sm[0]->access->mesh;
+    teqn_         *teqn  = smObject->sm[0]->access->teqn;
+    constants_    *Cst   = smObject->sm[0]->access->constants;
+
+    DM            da = mesh->da, fda = mesh->fda;
+    DMDALocalInfo info = mesh->info;
+    PetscInt      xs = info.xs, xe = info.xs + info.xm;
+    PetscInt      ys = info.ys, ye = info.ys + info.ym;
+    PetscInt      zs = info.zs, ze = info.zs + info.zm;
+    PetscInt      mx = info.mx, my = info.my, mz = info.mz;
+
+    PetscInt      i, j, k;
+    PetscInt      lxs, lxe, lys, lye, lzs, lze;
+
+    PetscReal     ***weight0, ***absc0, ***weight1, ***absc1, ***weight2, ***absc2;
+    PetscReal     ***TauP0, ***TauP1, ***TauP2, ***tmprt;
+
+    PetscReal     temp;
+    PetscReal     mfp;
+    PetscReal     m3Dia;
+    PetscReal     expMfp0, expMfp1, expMfp2;
+    PetscReal     Cu0, Cu1, Cu2;
+    PetscReal     k_b = 1.380649E-23; //*1E18; //boltzman constant in kg*nm^2/(K*s^2)
+
+    lxs = xs; if (xs==0) lxs = xs+1; lxe = xe; if (xe==mx) lxe = xe-1;
+    lys = ys; if (ys==0) lys = ys+1; lye = ye; if (ye==my) lye = ye-1;
+    lzs = zs; if (zs==0) lzs = zs+1; lze = ze; if (ze==mz) lze = ze-1;
+
+    DMDAVecGetArray(da, smObject->weightAbsc[0]->tauP, &TauP0);
+    DMDAVecGetArray(da, smObject->weightAbsc[1]->tauP, &TauP1);
+    DMDAVecGetArray(da, smObject->weightAbsc[2]->tauP, &TauP2);
+
+    DMDAVecGetArray(da, smObject->weightAbsc[0]->weight, &weight0);
+    DMDAVecGetArray(da, smObject->weightAbsc[0]->absc, &absc0);
+    DMDAVecGetArray(da, smObject->weightAbsc[1]->weight, &weight1);
+    DMDAVecGetArray(da, smObject->weightAbsc[1]->absc, &absc1);
+    DMDAVecGetArray(da, smObject->weightAbsc[2]->weight, &weight2);
+    DMDAVecGetArray(da, smObject->weightAbsc[2]->absc, &absc2);
+
+    // time step due to flow restrictions
+    for (k=lzs; k<lze; k++)
+    {
+        for (j=lys; j<lye; j++)
+        {
+            for (i=lxs; i<lxe; i++)
+            {
+                if (PetscIsInfOrNanReal(absc0[k][j][i]) || PetscIsInfOrNanReal(absc1[k][j][i]) || PetscIsInfOrNanReal(absc2[k][j][i])) //avoid division by 0.
+                {
+                    TauP0[k][j][i] = 10e-10;
+                    TauP1[k][j][i] = 10e-10;
+                    TauP2[k][j][i] = 10e-10;
+
+                    continue;
+                }
+
+                if (PetscIsInfOrNanReal(weight0[k][j][i]) || PetscIsInfOrNanReal(weight1[k][j][i]) || PetscIsInfOrNanReal(weight2[k][j][i])) //avoid division by 0.
+                {
+                    TauP0[k][j][i] = 10e-10;
+                    TauP1[k][j][i] = 10e-10;
+                    TauP2[k][j][i] = 10e-10;
+
+                    continue;
+                }
+
+                if (flags->isTeqnActive)
+                {
+                    DMDAVecGetArray(da, teqn->lTmprt, &tmprt);
+
+                    temp = tmprt[k][j][i]; // need to get at face value??
+
+                    DMDAVecRestoreArray(da, teqn->lTmprt, &tmprt);
+                }
+                else
+                {
+                    temp = Cst->tRef; //need at face??
+                }
+
+                mfp = pow(10, 6)*((k_b)*temp/(sqrt(2)*M_PI*3.46E-10*3.46E-10*101325)); // mfp in um
+
+                //m3Dia = sm4[k][j][i]/sm3[k][j][i];
+
+                if (absc0[k][j][i] > 0 && absc1[k][j][i] > 0 && absc2[k][j][i] > 0 && weight0[k][j][i] > 0 && weight1[k][j][i] > 0 && weight2[k][j][i] > 0) //avoid division by 0.
+                {
+                    expMfp0 = exp(-0.88/(2*mfp/(absc0[k][j][i])));
+                    expMfp1 = exp(-0.88/(2*mfp/(absc1[k][j][i])));
+                    expMfp2 = exp(-0.88/(2*mfp/(absc2[k][j][i])));
+
+                    Cu0 = (1 + 2*mfp*(1.2+0.4*expMfp0)/(absc0[k][j][i]));
+                    Cu1 = (1 + 2*mfp*(1.2+0.4*expMfp1)/(absc1[k][j][i]));
+                    Cu2 = (1 + 2*mfp*(1.2+0.4*expMfp2)/(absc2[k][j][i]));
+
+                    TauP0[k][j][i] = pow(10, -12)*absc0[k][j][i]*absc0[k][j][i]*smObject->rhoPart*Cu0/(18*Cst->nu*Cst->rho);
+                    TauP1[k][j][i] = pow(10, -12)*absc1[k][j][i]*absc1[k][j][i]*smObject->rhoPart*Cu1/(18*Cst->nu*Cst->rho);
+                    TauP2[k][j][i] = pow(10, -12)*absc2[k][j][i]*absc2[k][j][i]*smObject->rhoPart*Cu2/(18*Cst->nu*Cst->rho);
+                }
+                else
+                {
+                    TauP0[k][j][i] = 10e-10;
+                    TauP1[k][j][i] = 10e-10;
+                    TauP2[k][j][i] = 10e-10;
+                }
+
+
+
+            }
+        }
+    }
+
+    DMDAVecRestoreArray(da, smObject->weightAbsc[0]->tauP, &TauP0);
+    DMDAVecRestoreArray(da, smObject->weightAbsc[1]->tauP, &TauP1);
+    DMDAVecRestoreArray(da, smObject->weightAbsc[2]->tauP, &TauP2);
+
+    DMDAVecRestoreArray(da, smObject->weightAbsc[0]->weight, &weight0);
+    DMDAVecRestoreArray(da, smObject->weightAbsc[0]->absc, &absc0);
+    DMDAVecRestoreArray(da, smObject->weightAbsc[1]->weight, &weight1);
+    DMDAVecRestoreArray(da, smObject->weightAbsc[1]->absc, &absc1);
+    DMDAVecRestoreArray(da, smObject->weightAbsc[2]->weight, &weight2);
+    DMDAVecRestoreArray(da, smObject->weightAbsc[2]->absc, &absc2);
+
+    return(0);
+}
+
+//***************************************************************************************************************//
+
+// Compute abscissae and weights using the Stieltjes procedure
+// Input:
+//   moments: vector of scalar moments mu_0 to mu_{2N-1}
+//   N: number of quadrature points
+// Outputs:
+//   abscissae: quadrature nodes (Eigenvalues of Jacobi matrix)
+//   weights: quadrature weights
+//   alpha: diagonal of Jacobi matrix
+//   beta: off-diagonal of Jacobi matrix
+/*void computeStieltjesQuadrature(const std::vector<double>& moments, int N,
+                                std::vector<double>& abscissae,
+                                std::vector<double>& weights,
+                                std::vector<double>& alpha,
+                                std::vector<double>& beta)
+{
+    if ((int)moments.size() < 2 * N)
+        throw std::invalid_argument("Need at least 2N moments");
+
+    // Construct the moment matrix M (NxN Hankel matrix)
+    Eigen::MatrixXd M(N, N);
+    for (int i = 0; i < N; ++i)
+        for (int j = 0; j < N; ++j)
+            M(i, j) = moments[i + j];
+
+    // Perform Cholesky decomposition of M
+    Eigen::LLT<Eigen::MatrixXd> llt(M);
+    if (llt.info() != Eigen::Success)
+        throw std::runtime_error("Moment matrix is not positive definite");
+
+    Eigen::MatrixXd L = llt.matrixL();
+
+    // Compute recurrence coefficients alpha and beta
+    alpha.resize(N);
+    beta.resize(N - 1);
+
+    for (int k = 0; k < N; ++k)
+    {
+        Eigen::VectorXd phi_k = L.col(k);
+        double norm_phi_k = phi_k.norm();
+        alpha[k] = (phi_k.transpose() * (M * phi_k)).value() / (norm_phi_k * norm_phi_k);
+
+        if (k < N - 1)
+        {
+            double norm_phi_k1 = L.col(k + 1).norm();
+            beta[k] = norm_phi_k1 / norm_phi_k;
+        }
+    }
+
+    // Build Jacobi matrix J
+    Eigen::MatrixXd J = Eigen::MatrixXd::Zero(N, N);
+    for (int i = 0; i < N; ++i)
+        J(i, i) = alpha[i];
+    for (int i = 0; i < N - 1; ++i)
+        J(i, i + 1) = J(i + 1, i) = beta[i];
+
+    // Eigen decomposition
+    Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eigensolver(J);
+    if (eigensolver.info() != Eigen::Success)
+        throw std::runtime_error("Eigenvalue decomposition failed");
+
+    Eigen::VectorXd eigvals = eigensolver.eigenvalues();
+    Eigen::MatrixXd eigvecs = eigensolver.eigenvectors();
+
+    abscissae.resize(N);
+    weights.resize(N);
+
+    for (int i = 0; i < N; ++i)
+    {
+        abscissae[i] = eigvals(i);
+        weights[i] = moments[0] * eigvecs(0, i) * eigvecs(0, i);  // first row squared × mu_0
+    }
+
+    // Sort by increasing abscissae
+    std::vector<std::pair<double, double>> absc_wts(N);
+    for (int i = 0; i < N; ++i)
+        absc_wts[i] = std::make_pair(abscissae[i], weights[i]);
+
+    std::sort(absc_wts.begin(), absc_wts.end());
+
+    for (int i = 0; i < N; ++i)
+    {
+        abscissae[i] = absc_wts[i].first;
+        weights[i] = absc_wts[i].second;
+    }
+}*/

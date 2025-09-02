@@ -7,6 +7,9 @@ OGConc	6500000.0
 monoDFrac   0.2
 rhoPart 2200
 internalField uniform
+GMD    1.5
+GSD    2.5
+concFrac 1.0
 
 momentInitF0
 {

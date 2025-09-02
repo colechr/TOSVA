@@ -560,6 +560,57 @@ PetscErrorCode writeFieldsToXMF(domain_ *domain, const char* filexmf, PetscReal 
         );
     }
 
+    /*if(domain->flags.isIBMActive)
+    {
+        writeScalarToXMF
+        (
+            domain,
+            filexmf,
+            hdfileName.c_str(),
+            &file_id,
+            &dataspace_id,
+            time,
+            "bID",
+            domain->mesh->bodyTracker
+        );
+
+        writeScalarToXMF
+        (
+            domain,
+            filexmf,
+            hdfileName.c_str(),
+            &file_id,
+            &dataspace_id,
+            time,
+            "sID",
+            domain->mesh->surfTracker
+        );
+
+        writeScalarToXMF
+        (
+            domain,
+            filexmf,
+            hdfileName.c_str(),
+            &file_id,
+            &dataspace_id,
+            time,
+            "minCell",
+            domain->mesh->minCell
+        );
+
+        writeScalarToXMF
+        (
+            domain,
+            filexmf,
+            hdfileName.c_str(),
+            &file_id,
+            &dataspace_id,
+            time,
+            "dmin",
+            domain->mesh->dmin
+        );
+    }*/
+
     if(flags->isScalarMomentsActive)
     {
         for  (int  ii=0; ii < flags->isScalarMomentsActive; ii++)
@@ -590,7 +641,7 @@ PetscErrorCode writeFieldsToXMF(domain_ *domain, const char* filexmf, PetscReal 
             time,
             "quant",
             domain->smObject->quant
-        );
+        );*/
 
         writeScalarToXMF
         (
@@ -602,7 +653,7 @@ PetscErrorCode writeFieldsToXMF(domain_ *domain, const char* filexmf, PetscReal 
             time,
             "Dq",
             domain->smObject->Dq
-        );*/
+        );
 
         writeScalarToXMF
         (

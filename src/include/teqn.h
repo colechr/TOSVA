@@ -80,3 +80,5 @@ PetscErrorCode FormExplicitRhsT(teqn_ *teqn);
 
 //! \brief Compute tBar state for lateral damping region
 PetscErrorCode correctDampingSourcesT(teqn_ *teqn);
+
+PetscErrorCode resetNegT(teqn_ *teqn);

@@ -15,6 +15,9 @@ PetscErrorCode adjustTimeStep (domain_ *domain)
     PetscReal cfl        = 1e10;
     PetscReal maxU       = 0.0;
     PetscReal dxByU_min  = 1e10;
+    PetscReal dxBy__min  = 1e10;
+    PetscReal dxBygTau_min  = 1e10;
+    PetscReal dxByaTau_min  = 1e10;
     cellIds   maxUCell;
 
     clock_        *clock = domain[0].clock;
@@ -26,11 +29,43 @@ PetscErrorCode adjustTimeStep (domain_ *domain)
     {
         acquisition_  *acquisition = domain->acquisition;
 
-        // set cfl
-        cfl = PetscMin(cfl, clock->cfl);
+        if(flags->isScalarMomentsActive)
+        {
+            // time step imposed by the flow on this domain
+            timeStepInfo(&domain[d], clock, dxByU_min, maxU, maxUCell);
 
-        // time step imposed by the flow on this domain
-        timeStepInfo(&domain[d], clock, dxByU_min, maxU, maxUCell);
+            if (flags->isSediFluxActive && (clock->it != clock->itStart)) //skip first iteration for stability, Allows U-field to develop first.
+            {
+                timeStepInfoSMSed(&domain[d], clock, dxBygTau_min);
+
+                if (dxBygTau_min == 1e10)
+                {
+                    char error[512];
+                    sprintf(error, "DIVERGED SMs. EIther Tau is 0 everywhere, or nan exists. Try lower CFL or lower GSD/GMD");
+                    fatalErrorInFunction("adjustTimeStep", error);
+                }
+            }
+
+            if (flags->isDeviFluxActive && (clock->it != clock->itStart)) //skip first iteration for stability; acceleration term needed but not yet availabile until later iterations.
+            {
+                timeStepInfoSMDev(&domain[d], clock, dxByaTau_min);
+
+                if (dxByaTau_min == 1e10)
+                {
+                    char error[512];
+                    sprintf(error, "DIVERGED SMs. EIther Tau is 0 everywhere, or nan exists. Try lower CFL or lower GSD/GMD");
+                    fatalErrorInFunction("adjustTimeStep", error);
+                }
+            }
+        }
+        else
+        {
+            // set cfl
+            cfl = PetscMin(cfl, clock->cfl);
+
+            // time step imposed by the flow on this domain
+            timeStepInfo(&domain[d], clock, dxByU_min, maxU, maxUCell);
+        }
 
         // time step imposed by the precursor on this domain (must be corrected to syncronize time steps)
         if(domain[d].flags.isConcurrentPrecursorActive)
@@ -44,8 +79,28 @@ PetscErrorCode adjustTimeStep (domain_ *domain)
         // output fields
         if(flags->isAdjustableTime)
         {
-            // 2. takes the local ratio
-            clock->dt   = clock->cfl * dxByU_min;
+            //take minimum from covective (divergence), sedimentive, and deviative CFL. Takes convective if SM is off.
+            dxBy__min = PetscMin(dxByU_min, PetscMin(dxBygTau_min, dxByaTau_min));
+
+            if(flags->isScalarMomentsActive)
+            {
+                if (dxBy__min == dxByU_min)
+                {
+                    clock->dt   = clock->cfl * dxBy__min;
+                    cfl = PetscMin(cfl, clock->cfl);
+                }
+                else
+                {
+                    clock->dt   = clock->cflSM * dxBy__min;
+                    cfl = PetscMin(cfl, clock->cflSM);
+                }
+            }
+            else
+            {
+                // 2. takes the local ratio
+                clock->dt   = clock->cfl * dxBy__min;
+            }
+
 
             PetscReal timeStart;
             PetscReal timeInterval;
@@ -53,7 +108,7 @@ PetscErrorCode adjustTimeStep (domain_ *domain)
             timeStart    = clock->startTime;
             timeInterval = domain[d].io->timeInterval;
 
-            timeStepSet(clock, timeStart, timeInterval, dxByU_min, flag, cfl);
+            timeStepSet(clock, timeStart, timeInterval, dxBy__min, flag, cfl);
             predictedDt  = currentDistanceToWriteTime(clock, timeStart, timeInterval);
 
             // averaged tke
@@ -62,7 +117,7 @@ PetscErrorCode adjustTimeStep (domain_ *domain)
                 timeStart    = domain[d].io->tkeStartTime;
                 timeInterval = domain[d].io->tkePrd;
 
-                timeStepSet(clock, timeStart, timeInterval, dxByU_min, flag, cfl);
+                timeStepSet(clock, timeStart, timeInterval, dxBy__min, flag, cfl);
                 predictedDt  = gcd(predictedDt, currentDistanceToWriteTime(clock, timeStart, timeInterval));
             }
 
@@ -72,7 +127,7 @@ PetscErrorCode adjustTimeStep (domain_ *domain)
                 timeStart    = domain[d].io->avgStartTime;
                 timeInterval = domain[d].io->avgPrd;
 
-                timeStepSet(clock, timeStart, timeInterval, dxByU_min, flag, cfl);
+                timeStepSet(clock, timeStart, timeInterval, dxBy__min, flag, cfl);
                 predictedDt  = gcd(predictedDt, currentDistanceToWriteTime(clock, timeStart, timeInterval));
             }
 
@@ -82,7 +137,7 @@ PetscErrorCode adjustTimeStep (domain_ *domain)
                 timeStart    = domain[d].io->phAvgStartTime;
                 timeInterval = domain[d].io->phAvgPrd;
 
-                timeStepSet(clock, timeStart, timeInterval, dxByU_min, flag, cfl);
+                timeStepSet(clock, timeStart, timeInterval, dxBy__min, flag, cfl);
                 predictedDt  = gcd(predictedDt, currentDistanceToWriteTime(clock, timeStart, timeInterval));
             }
 
@@ -92,7 +147,7 @@ PetscErrorCode adjustTimeStep (domain_ *domain)
                 timeStart    = acquisition->keBudFields->avgStartTime;
                 timeInterval = acquisition->keBudFields->avgPrd;
 
-                timeStepSet(clock, timeStart, timeInterval, dxByU_min, flag, cfl);
+                timeStepSet(clock, timeStart, timeInterval, dxBy__min, flag, cfl);
                 predictedDt  = gcd(predictedDt, currentDistanceToWriteTime(clock, timeStart, timeInterval));
             }
 
@@ -105,7 +160,7 @@ PetscErrorCode adjustTimeStep (domain_ *domain)
                     timeStart    = ibm->timeStart;
                     timeInterval = ibm->timeInterval;
 
-                    timeStepSet(clock, timeStart, timeInterval, dxByU_min, flag, cfl);
+                    timeStepSet(clock, timeStart, timeInterval, dxBy__min, flag, cfl);
                     predictedDt  = gcd(predictedDt, currentDistanceToWriteTime(clock, timeStart, timeInterval));
                 }
             }
@@ -117,7 +172,7 @@ PetscErrorCode adjustTimeStep (domain_ *domain)
                     timeStart    = domain[d].farm->timeStart;
                     timeInterval = domain[d].farm->timeInterval;
 
-                    timeStepSet(clock, timeStart, timeInterval, dxByU_min, flag, cfl);
+                    timeStepSet(clock, timeStart, timeInterval, dxBy__min, flag, cfl);
                     predictedDt  = gcd(predictedDt, currentDistanceToWriteTime(clock, timeStart, timeInterval));
                 }
             }
@@ -131,7 +186,7 @@ PetscErrorCode adjustTimeStep (domain_ *domain)
                     timeStart    = domain[d].io->startTimeCatalyst;
                     timeInterval = domain[d].io->timeIntervalCatalyst;
 
-                    timeStepSet(clock, timeStart, timeInterval, dxByU_min, flag, cfl);
+                    timeStepSet(clock, timeStart, timeInterval, dxBy__min, flag, cfl);
                     predictedDt  = gcd(predictedDt, currentDistanceToWriteTime(clock, timeStart, timeInterval));
                 }
                 #endif
@@ -145,7 +200,7 @@ PetscErrorCode adjustTimeStep (domain_ *domain)
                     timeStart    = domain[0].acquisition->LM3->avgStartTime;
                     timeInterval = domain[0].acquisition->LM3->avgPrd;
 
-                    timeStepSet(clock, timeStart, timeInterval, dxByU_min, flag, cfl);
+                    timeStepSet(clock, timeStart, timeInterval, dxBy__min, flag, cfl);
                     predictedDt  = gcd(predictedDt, currentDistanceToWriteTime(clock, timeStart, timeInterval));
                 }
 
@@ -155,7 +210,7 @@ PetscErrorCode adjustTimeStep (domain_ *domain)
                     timeStart    = domain[0].acquisition->perturbABL->avgStartTime;
                     timeInterval = domain[0].acquisition->perturbABL->avgPrd;
 
-                    timeStepSet(clock, timeStart, timeInterval, dxByU_min, flag, cfl);
+                    timeStepSet(clock, timeStart, timeInterval, dxBy__min, flag, cfl);
                     predictedDt  = gcd(predictedDt, currentDistanceToWriteTime(clock, timeStart, timeInterval));
                 }
 
@@ -165,7 +220,7 @@ PetscErrorCode adjustTimeStep (domain_ *domain)
                     timeStart    = domain[0].acquisition->statisticsABL->avgStartTime;
                     timeInterval = domain[0].acquisition->statisticsABL->avgPrd;
 
-                    timeStepSet(clock, timeStart, timeInterval, dxByU_min, flag, cfl);
+                    timeStepSet(clock, timeStart, timeInterval, dxBy__min, flag, cfl);
                     predictedDt  = gcd(predictedDt, currentDistanceToWriteTime(clock, timeStart, timeInterval));
                 }
 
@@ -178,7 +233,7 @@ PetscErrorCode adjustTimeStep (domain_ *domain)
                             timeStart    = acquisition->probes->rakes[r].timeStart;
                             timeInterval = acquisition->probes->rakes[r].timeInterval;
 
-                            timeStepSet(clock, timeStart, timeInterval, dxByU_min, flag, cfl);
+                            timeStepSet(clock, timeStart, timeInterval, dxBy__min, flag, cfl);
                             predictedDt  = gcd(predictedDt, currentDistanceToWriteTime(clock, timeStart, timeInterval));
 
                             if(acquisition->probes->allSameIO) break;
@@ -196,7 +251,7 @@ PetscErrorCode adjustTimeStep (domain_ *domain)
                             timeStart    = acquisition->iSections->timeStart;
                             timeInterval = acquisition->iSections->timeInterval;
 
-                            timeStepSet(clock, timeStart, timeInterval, dxByU_min, flag, cfl);
+                            timeStepSet(clock, timeStart, timeInterval, dxBy__min, flag, cfl);
                             predictedDt  = gcd(predictedDt, currentDistanceToWriteTime(clock, timeStart, timeInterval));
                         }
                     }
@@ -209,7 +264,7 @@ PetscErrorCode adjustTimeStep (domain_ *domain)
                             timeStart    = acquisition->jSections->timeStart;
                             timeInterval = acquisition->jSections->timeInterval;
 
-                            timeStepSet(clock, timeStart, timeInterval, dxByU_min, flag, cfl);
+                            timeStepSet(clock, timeStart, timeInterval, dxBy__min, flag, cfl);
                             predictedDt  = gcd(predictedDt, currentDistanceToWriteTime(clock, timeStart, timeInterval));
                         }
                     }
@@ -222,7 +277,7 @@ PetscErrorCode adjustTimeStep (domain_ *domain)
                             timeStart    = acquisition->kSections->timeStart;
                             timeInterval = acquisition->kSections->timeInterval;
 
-                            timeStepSet(clock, timeStart, timeInterval, dxByU_min, flag, cfl);
+                            timeStepSet(clock, timeStart, timeInterval, dxBy__min, flag, cfl);
                             predictedDt  = gcd(predictedDt, currentDistanceToWriteTime(clock, timeStart, timeInterval));
                         }
                     }
@@ -240,7 +295,7 @@ PetscErrorCode adjustTimeStep (domain_ *domain)
                         timeStart    = domain[d].abl->precursor->domain->acquisition->statisticsABL->avgStartTime;
                         timeInterval = domain[d].abl->precursor->domain->acquisition->statisticsABL->avgPrd;
 
-                        timeStepSet(clock, timeStart, timeInterval, dxByU_min, flag, cfl);
+                        timeStepSet(clock, timeStart, timeInterval, dxBy__min, flag, cfl);
                         predictedDt  = gcd(predictedDt, currentDistanceToWriteTime(clock, timeStart, timeInterval));
                     }
                 }
@@ -251,7 +306,7 @@ PetscErrorCode adjustTimeStep (domain_ *domain)
             if(clock->it == 0)
             {
                 // scale max uniform dt due to acquisition so that it complies the CFL
-                while(predictedDt / dxByU_min > clock->cfl)
+                while(predictedDt / dxBy__min > clock->cfl)
                 {
                     predictedDt /= 2.0;
                 }
@@ -305,7 +360,7 @@ PetscErrorCode adjustTimeStep (domain_ *domain)
 
                             PetscReal maxSpeed   = ibmRot->maxR * ibmRot->angSpeed;
 
-                            PetscReal dtIBM      = dxByU_min*maxU / maxSpeed;
+                            PetscReal dtIBM      = dxBy__min*maxU / maxSpeed;
 
                             clock->dt    = std::min(clock->dt, dtIBM);
                         }
@@ -315,7 +370,7 @@ PetscErrorCode adjustTimeStep (domain_ *domain)
         }
         else
         {
-            if(clock->it>clock->itStart) clock->cfl =  clock->dt / dxByU_min;
+            if(clock->it>clock->itStart) clock->cfl =  clock->dt / dxBy__min;
 
             // added by Arjun for fixed time step as a last control
             /*
@@ -345,7 +400,7 @@ PetscErrorCode adjustTimeStep (domain_ *domain)
     // discard all previous changes if time step is fixed as acquistion gcd
     if(flags->isAdjustableTime == 2)
     {
-        if(clock->acquisitionDt / dxByU_min > 1.0)
+        if(clock->acquisitionDt / dxBy__min > 1.0)
         {
             clock->acquisitionDt /= 2.0;
         }
@@ -363,31 +418,48 @@ PetscErrorCode adjustTimeStep (domain_ *domain)
     {
         clock->time = clock->time + clock->dt;
     }
-    else 
+    else
     {
-        //to exit when reaching end time 
+        //to exit when reaching end time
         if(clock->time + clock->dt > clock->endTime)
         {
             clock->time = clock->time + clock->dt;
         }
-        else 
+        else
         {
             // this ensures there is no floating point addition error
             clock->time = clock->startTime + (clock->it + 1) * clock->dt;
         }
     }
-    
-    cfl = clock->dt / dxByU_min;
+
+    if(!flags->isScalarMomentsActive)
+    {
+        cfl = clock->dt / dxBy__min;
+    }
+
+    const char *cfl_label = "DIV";
+
+    if (dxBy__min == dxBygTau_min)
+    {
+        cfl_label = "SED";
+        PetscPrintf(PETSC_COMM_WORLD, "\n\nWARNING ... Scalar moments sedFlux is limiting momentum time step! Lower GMD or GSD, or turn sedFlux off to avoid.\n\n");
+    }
+    else if (dxBy__min == dxByaTau_min)
+    {
+        cfl_label = "DEV";
+        PetscPrintf(PETSC_COMM_WORLD, "\n\nWARNING ... Scalar moments devFlux is limiting momentum time step! Lower GMD or GSD, or turn devFlux off to avoid.\n\n");
+    }
+
 
     PetscPrintf(PETSC_COMM_WORLD, "\n\nTime: %lf\n\n", clock->time);
 
     if(clock->it==clock->itStart)
     {
-        PetscPrintf(PETSC_COMM_WORLD, "Iteration = %ld, CFL = %lf, uMax = %.6f, dt = %.6f, dtMaxCFL = %.6f, adjust due to write flag: %ld\n", clock->it, cfl, maxU, clock->dt, dxByU_min, flag);
+        PetscPrintf(PETSC_COMM_WORLD, "Iteration = %ld, CFL_%s = %lf, uMax = %.6f, dt = %.6f, dtMaxCFL = %.6f, adjust due to write flag: %ld\n", clock->it, cfl_label, cfl, maxU, clock->dt, dxBy__min, flag);
     }
     else
     {
-        PetscPrintf(PETSC_COMM_WORLD, "Iteration = %ld, CFL = %lf, uMax = %.6f (i,j,k = %ld, %ld, %ld), dt = %.6f, dtMaxCFL = %.6f, adjust due to write flag: %ld\n", clock->it, cfl, maxU, maxUCell.i, maxUCell.j, maxUCell.k, clock->dt, dxByU_min, flag);
+        PetscPrintf(PETSC_COMM_WORLD, "Iteration = %ld, CFL_%s = %lf, uMax = %.6f (i,j,k = %ld, %ld, %ld), dt = %.6f, dtMaxCFL = %.6f, adjust due to write flag: %ld\n", clock->it, cfl_label, cfl, maxU, maxUCell.i, maxUCell.j, maxUCell.k, clock->dt, dxBy__min, flag);
     }
 
     return(0);
@@ -524,6 +596,342 @@ PetscErrorCode timeStepInfo(domain_ *domain, clock_ *clock, PetscReal &dxByU_min
     DMDAVecRestoreArray(fda, mesh->lZet, &zet);
     DMDAVecRestoreArray(da,  mesh->lAj, &aj);
     DMDAVecRestoreArray(da,  mesh->lNvert, &nvert);
+
+    return(0);
+}
+
+//***************************************************************************************************************//
+
+PetscErrorCode timeStepInfoSMSed(domain_ *domain, clock_ *clock, PetscReal &dxBygTau_min)
+{
+    flags_        *flags = domain->access.flags;
+    mesh_         *mesh  = domain->mesh;
+    ueqn_         *ueqn  = domain->ueqn;
+    SMObj_        *smObject  = domain->smObject;
+
+    DM            da = mesh->da, fda = mesh->fda;
+    DMDALocalInfo info = mesh->info;
+    PetscInt      xs = info.xs, xe = info.xs + info.xm;
+    PetscInt      ys = info.ys, ye = info.ys + info.ym;
+    PetscInt      zs = info.zs, ze = info.zs + info.zm;
+    PetscInt      mx = info.mx, my = info.my, mz = info.mz;
+
+    Cmpnts        ***ucat, ***ucont;
+    Cmpnts        ***csi, ***eta, ***zet;
+    PetscReal     ***nvert, ***aj;
+
+    PetscInt      i, j, k;
+    PetscInt      lxs, lxe, lys, lye, lzs, lze;
+
+    PetscReal     ***TauP0, ***TauP1, ***TauP2;
+
+    lxs = xs; if (xs==0) lxs = xs+1; lxe = xe; if (xe==mx) lxe = xe-1;
+    lys = ys; if (ys==0) lys = ys+1; lye = ye; if (ye==my) lye = ye-1;
+    lzs = zs; if (zs==0) lzs = zs+1; lze = ze; if (ze==mz) lze = ze-1;
+
+    PetscReal ldx        = 1e10;
+    PetscReal ldi_min    = 1e10, ldj_min    = 1e10, ldk_min = 1e10;
+    PetscReal ldxBygTau_min = 1e10, gdxBygTau_min = 1e10;
+
+    DMDAVecGetArray(da,  mesh->lNvert, &nvert);
+
+    DMDAVecGetArray(da, smObject->weightAbsc[0]->tauP, &TauP0);
+    DMDAVecGetArray(da, smObject->weightAbsc[1]->tauP, &TauP1);
+    DMDAVecGetArray(da, smObject->weightAbsc[2]->tauP, &TauP2);
+
+    DMDAVecGetArray(da,  mesh->lAj,    &aj);
+    DMDAVecGetArray(fda, mesh->lCsi, &csi);
+    DMDAVecGetArray(fda, mesh->lEta, &eta);
+    DMDAVecGetArray(fda, mesh->lZet, &zet);
+
+    // time step due to particle sedimentiation
+    for (k=lzs; k<lze; k++)
+    {
+        for (j=lys; j<lye; j++)
+        {
+            for (i=lxs; i<lxe; i++)
+            {
+                if(!isIBMSolidCell(k, j, i, nvert))
+                {
+
+                    // compute cell sizes
+                    PetscReal ldi = 1./aj[k][j][i]/nMag(csi[k][j][i]);
+                    PetscReal ldj = 1./aj[k][j][i]/nMag(eta[k][j][i]);
+                    PetscReal ldk = 1./aj[k][j][i]/nMag(zet[k][j][i]);
+
+                    // compute dxBygTau
+                    PetscReal ldxBygTau0 = PetscMin(ldi/(9.81*TauP0[k][j][i]), PetscMin(ldj/(9.81*TauP0[k][j][i]), ldk/(9.81*TauP0[k][j][i])));
+                    PetscReal ldxBygTau1 = PetscMin(ldi/(9.81*TauP1[k][j][i]), PetscMin(ldj/(9.81*TauP1[k][j][i]), ldk/(9.81*TauP1[k][j][i])));
+                    PetscReal ldxBygTau2 = PetscMin(ldi/(9.81*TauP2[k][j][i]), PetscMin(ldj/(9.81*TauP2[k][j][i]), ldk/(9.81*TauP2[k][j][i])));
+
+                    PetscReal ldxBygTau = PetscMin(ldxBygTau0, PetscMin(ldxBygTau1, ldxBygTau2));
+
+                    // min overall dxByU
+                    ldxBygTau_min = PetscMin(ldxBygTau_min, ldxBygTau);
+
+                }
+            }
+        }
+    }
+
+    // max in this domain
+    MPI_Allreduce(&ldxBygTau_min,   &gdxBygTau_min, 1, MPIU_REAL, MPIU_MIN, mesh->MESH_COMM);
+
+    if(gdxBygTau_min < dxBygTau_min)
+    {
+        dxBygTau_min = gdxBygTau_min;
+    }
+
+    DMDAVecRestoreArray(da,  mesh->lNvert, &nvert);
+
+    DMDAVecRestoreArray(da, smObject->weightAbsc[0]->tauP, &TauP0);
+    DMDAVecRestoreArray(da, smObject->weightAbsc[1]->tauP, &TauP1);
+    DMDAVecRestoreArray(da, smObject->weightAbsc[2]->tauP, &TauP2);
+
+    DMDAVecRestoreArray(da,  mesh->lAj,    &aj);
+    DMDAVecRestoreArray(fda, mesh->lCsi, &csi);
+    DMDAVecRestoreArray(fda, mesh->lEta, &eta);
+    DMDAVecRestoreArray(fda, mesh->lZet, &zet);
+
+    return(0);
+}
+
+//***************************************************************************************************************//
+
+PetscErrorCode timeStepInfoSMDev(domain_ *domain, clock_ *clock, PetscReal &dxByaTau_min)
+{
+    flags_        *flags = domain->access.flags;
+    mesh_         *mesh  = domain->mesh;
+    ueqn_         *ueqn  = domain->ueqn;
+    SMObj_        *smObject  = domain->smObject;
+
+    DM            da = mesh->da, fda = mesh->fda;
+    DMDALocalInfo info = mesh->info;
+    PetscInt      xs = info.xs, xe = info.xs + info.xm;
+    PetscInt      ys = info.ys, ye = info.ys + info.ym;
+    PetscInt      zs = info.zs, ze = info.zs + info.zm;
+    PetscInt      mx = info.mx, my = info.my, mz = info.mz;
+
+    Cmpnts        ***csi, ***eta, ***zet;
+    PetscReal     ***nvert, ***aj;
+
+    PetscInt      i, j, k;
+    PetscInt      lxs, lxe, lys, lye, lzs, lze;
+
+    PetscReal     ***TauP0, ***TauP1, ***TauP2;
+
+    lxs = xs; if (xs==0) lxs = xs+1; lxe = xe; if (xe==mx) lxe = xe-1;
+    lys = ys; if (ys==0) lys = ys+1; lye = ye; if (ye==my) lye = ye-1;
+    lzs = zs; if (zs==0) lzs = zs+1; lze = ze; if (ze==mz) lze = ze-1;
+
+    PetscReal     du_dx, du_dy, du_dz, dv_dx, dv_dy, dv_dz, dw_dx, dw_dy, dw_dz;
+
+    PetscReal     dxdc, dxde, dxdz, dydc, dyde, dydz, dzdc, dzde, dzdz;
+    PetscReal     dudc, dude, dudz, dvdc, dvde, dvdz, dwdc, dwde, dwdz;      // velocity der. w.r.t. curvil. coords
+
+    PetscReal     csi0, csi1, csi2, eta0, eta1, eta2, zet0, zet1, zet2, ajc;      // surface area vectors components
+
+    Cmpnts	      ***icsi, ***ieta, ***izet;
+    Cmpnts	      ***jcsi, ***jeta, ***jzet;
+    Cmpnts	      ***kcsi, ***keta, ***kzet;
+
+    PetscReal     ***iaj, ***jaj, ***kaj;
+
+    PetscInt      ***markVent;
+
+    Cmpnts        ***ucat, ***ucat_o, matDerI, matDerJ, matDerK, matDer;
+
+    PetscReal ldx        = 1e10;
+    PetscReal ldxByaTau_min = 1e10, gdxByaTau_min = 1e10;
+
+    DMDAVecGetArray(fda, ueqn->lUcat,  &ucat);
+    DMDAVecGetArray(fda, ueqn->Ucat_o, &ucat_o);
+
+    DMDAVecGetArray(fda, mesh->lICsi, &icsi);
+    DMDAVecGetArray(fda, mesh->lIEta, &ieta);
+    DMDAVecGetArray(fda, mesh->lIZet, &izet);
+
+    DMDAVecGetArray(fda, mesh->lJCsi, &jcsi);
+    DMDAVecGetArray(fda, mesh->lJEta, &jeta);
+    DMDAVecGetArray(fda, mesh->lJZet, &jzet);
+
+    DMDAVecGetArray(fda, mesh->lKCsi, &kcsi);
+    DMDAVecGetArray(fda, mesh->lKEta, &keta);
+    DMDAVecGetArray(fda, mesh->lKZet, &kzet);
+
+    DMDAVecGetArray(da, mesh->lIAj, &iaj);
+    DMDAVecGetArray(da, mesh->lJAj, &jaj);
+    DMDAVecGetArray(da, mesh->lKAj, &kaj);
+
+    DMDAVecGetArray(da,  mesh->lAj,    &aj);
+    DMDAVecGetArray(fda, mesh->lCsi, &csi);
+    DMDAVecGetArray(fda, mesh->lEta, &eta);
+    DMDAVecGetArray(fda, mesh->lZet, &zet);
+
+    DMDAVecGetArray(da, smObject->weightAbsc[0]->tauP, &TauP0);
+    DMDAVecGetArray(da, smObject->weightAbsc[1]->tauP, &TauP1);
+    DMDAVecGetArray(da, smObject->weightAbsc[2]->tauP, &TauP2);
+
+    DMDAVecGetArray(da, mesh->ventMarkers, &markVent);
+    DMDAVecGetArray(da, mesh->lNvert, &nvert);
+
+    // time step due to particle deviation restrictions
+    for (k=lzs; k<lze; k++)
+    {
+        for (j=lys; j<lye; j++)
+        {
+            for (i=lxs; i<lxe; i++)
+            {
+                if(!isIBMSolidCell(k, j, i, nvert))
+                {
+                    //i-faces
+                    csi0 = icsi[k][j][i].x, csi1 = icsi[k][j][i].y, csi2 = icsi[k][j][i].z;
+                    eta0 = ieta[k][j][i].x, eta1 = ieta[k][j][i].y, eta2 = ieta[k][j][i].z;
+                    zet0 = izet[k][j][i].x, zet1 = izet[k][j][i].y, zet2 = izet[k][j][i].z;
+                    ajc  = iaj[k][j][i];
+
+                    // compute cartesian velocity derivatives w.r.t. curvilinear coords
+                    Compute_du_i
+                    (   mesh, i, j, k, mx, my, mz, ucat, nvert,
+                        &dudc, &dvdc, &dwdc,
+                        &dude, &dvde, &dwde,
+                        &dudz, &dvdz, &dwdz
+                    );
+
+                    // compute cartesian velocity derivatives w.r.t cartesian coords
+                    Compute_du_dxyz
+                    (
+                        mesh,
+                        csi0, csi1, csi2, eta0, eta1, eta2, zet0,
+                        zet1, zet2, ajc, dudc, dvdc, dwdc, dude, dvde, dwde,
+                        dudz, dvdz, dwdz, &du_dx, &dv_dx, &dw_dx, &du_dy,
+                        &dv_dy, &dw_dy, &du_dz, &dv_dz, &dw_dz
+                    );
+
+                    matDerI.x = (ucat[k][j][i].x - ucat_o[k][j][i].x)/clock->dt + ucat[k][j][i].x * du_dx + ucat[k][j][i].y * du_dy + ucat[k][j][i].z * du_dz;
+                    matDerI.y = (ucat[k][j][i].y - ucat_o[k][j][i].y)/clock->dt + ucat[k][j][i].x * dv_dx + ucat[k][j][i].y * dv_dy + ucat[k][j][i].z * dv_dz;
+                    matDerI.z = (ucat[k][j][i].z - ucat_o[k][j][i].z)/clock->dt + ucat[k][j][i].x * dw_dx + ucat[k][j][i].y * dw_dy + ucat[k][j][i].z * dw_dz;
+
+                    //j-face
+                    csi0 = jcsi[k][j][i].x, csi1 = jcsi[k][j][i].y, csi2 = jcsi[k][j][i].z;
+                    eta0 = jeta[k][j][i].x, eta1 = jeta[k][j][i].y, eta2 = jeta[k][j][i].z;
+                    zet0 = jzet[k][j][i].x, zet1 = jzet[k][j][i].y, zet2 = jzet[k][j][i].z;
+                    ajc  = jaj[k][j][i];
+
+                    // compute cartesian velocity derivatives w.r.t. curvilinear coords
+                    Compute_du_j
+                    (   mesh, i, j, k, mx, my, mz, ucat, nvert,
+                        &dudc, &dvdc, &dwdc,
+                        &dude, &dvde, &dwde,
+                        &dudz, &dvdz, &dwdz
+                    );
+
+                    // compute cartesian velocity derivatives w.r.t cartesian coords
+                    Compute_du_dxyz
+                    (
+                        mesh,
+                        csi0, csi1, csi2, eta0, eta1, eta2, zet0,
+                        zet1, zet2, ajc, dudc, dvdc, dwdc, dude, dvde, dwde,
+                        dudz, dvdz, dwdz, &du_dx, &dv_dx, &dw_dx, &du_dy,
+                        &dv_dy, &dw_dy, &du_dz, &dv_dz, &dw_dz
+                    );
+
+                    matDerJ.x = (ucat[k][j][i].x - ucat_o[k][j][i].x)/clock->dt + ucat[k][j][i].x * du_dx + ucat[k][j][i].y * du_dy + ucat[k][j][i].z * du_dz;
+                    matDerJ.y = (ucat[k][j][i].y - ucat_o[k][j][i].y)/clock->dt + ucat[k][j][i].x * dv_dx + ucat[k][j][i].y * dv_dy + ucat[k][j][i].z * dv_dz;
+                    matDerJ.z = (ucat[k][j][i].z - ucat_o[k][j][i].z)/clock->dt + ucat[k][j][i].x * dw_dx + ucat[k][j][i].y * dw_dy + ucat[k][j][i].z * dw_dz;
+
+                    //k-face
+                    csi0 = kcsi[k][j][i].x, csi1 = kcsi[k][j][i].y, csi2 = kcsi[k][j][i].z;
+                    eta0 = keta[k][j][i].x, eta1 = keta[k][j][i].y, eta2 = keta[k][j][i].z;
+                    zet0 = kzet[k][j][i].x, zet1 = kzet[k][j][i].y, zet2 = kzet[k][j][i].z;
+                    ajc  = kaj[k][j][i];
+
+                    // compute cartesian velocity derivatives w.r.t. curvilinear coords
+                    Compute_du_k
+                    (   mesh, i, j, k, mx, my, mz, ucat, nvert,
+                        &dudc, &dvdc, &dwdc,
+                        &dude, &dvde, &dwde,
+                        &dudz, &dvdz, &dwdz
+                    );
+
+                    // compute cartesian velocity derivatives w.r.t cartesian coords
+                    Compute_du_dxyz
+                    (
+                        mesh,
+                        csi0, csi1, csi2, eta0, eta1, eta2, zet0,
+                        zet1, zet2, ajc, dudc, dvdc, dwdc, dude, dvde, dwde,
+                        dudz, dvdz, dwdz, &du_dx, &dv_dx, &dw_dx, &du_dy,
+                        &dv_dy, &dw_dy, &du_dz, &dv_dz, &dw_dz
+                    );
+
+                    matDerK.x = (ucat[k][j][i].x - ucat_o[k][j][i].x)/clock->dt + ucat[k][j][i].x * du_dx + ucat[k][j][i].y * du_dy + ucat[k][j][i].z * du_dz;
+                    matDerK.y = (ucat[k][j][i].y - ucat_o[k][j][i].y)/clock->dt + ucat[k][j][i].x * dv_dx + ucat[k][j][i].y * dv_dy + ucat[k][j][i].z * dv_dz;
+                    matDerK.z = (ucat[k][j][i].z - ucat_o[k][j][i].z)/clock->dt + ucat[k][j][i].x * dw_dx + ucat[k][j][i].y * dw_dy + ucat[k][j][i].z * dw_dz;
+
+                    //printf("%f %f %f %f %f %f\n", ucat[k][j][i].z, ucat_o[k][j][i].z, clock->dt, dw_dx, dw_dy, dw_dz);
+
+                    matDer.x = PetscMax(fabs(matDerI.x), PetscMax(fabs(matDerK.x), fabs(matDerJ.x)));
+                    matDer.y = PetscMax(fabs(matDerI.y), PetscMax(fabs(matDerK.y), fabs(matDerJ.y)));
+                    matDer.z = PetscMax(fabs(matDerI.z), PetscMax(fabs(matDerK.z), fabs(matDerJ.z)));
+
+                    // compute cell sizes
+                    PetscReal ldi = 1./aj[k][j][i]/nMag(csi[k][j][i]);
+                    PetscReal ldj = 1./aj[k][j][i]/nMag(eta[k][j][i]);
+                    PetscReal ldk = 1./aj[k][j][i]/nMag(zet[k][j][i]);
+
+                    // compute dxBygTau
+                    PetscReal ldxByaTau0 = PetscMin(ldi/(matDer.x*TauP0[k][j][i]), PetscMin(ldj/(matDer.y*TauP0[k][j][i]), ldk/(matDer.z*TauP0[k][j][i])));
+                    PetscReal ldxByaTau1 = PetscMin(ldi/(matDer.x*TauP1[k][j][i]), PetscMin(ldj/(matDer.y*TauP1[k][j][i]), ldk/(matDer.z*TauP1[k][j][i])));
+                    PetscReal ldxByaTau2 = PetscMin(ldi/(matDer.x*TauP2[k][j][i]), PetscMin(ldj/(matDer.y*TauP2[k][j][i]), ldk/(matDer.z*TauP2[k][j][i])));
+
+                    PetscReal ldxByaTau = PetscMin(ldxByaTau0, PetscMin(ldxByaTau1, ldxByaTau2));
+
+                    // min overall dxByU
+                    ldxByaTau_min = PetscMin(ldxByaTau_min, ldxByaTau);
+
+                }
+            }
+        }
+    }
+
+    // max in this domain
+    MPI_Allreduce(&ldxByaTau_min,   &gdxByaTau_min, 1, MPIU_REAL, MPIU_MIN, mesh->MESH_COMM);
+
+    if(gdxByaTau_min < dxByaTau_min)
+    {
+        dxByaTau_min = gdxByaTau_min;
+    }
+
+    DMDAVecRestoreArray(fda, ueqn->lUcat,  &ucat);
+    DMDAVecRestoreArray(fda, ueqn->Ucat_o, &ucat_o);
+
+    DMDAVecRestoreArray(fda, mesh->lICsi, &icsi);
+    DMDAVecRestoreArray(fda, mesh->lIEta, &ieta);
+    DMDAVecRestoreArray(fda, mesh->lIZet, &izet);
+
+    DMDAVecRestoreArray(fda, mesh->lJCsi, &jcsi);
+    DMDAVecRestoreArray(fda, mesh->lJEta, &jeta);
+    DMDAVecRestoreArray(fda, mesh->lJZet, &jzet);
+
+    DMDAVecRestoreArray(fda, mesh->lKCsi, &kcsi);
+    DMDAVecRestoreArray(fda, mesh->lKEta, &keta);
+    DMDAVecRestoreArray(fda, mesh->lKZet, &kzet);
+
+    DMDAVecRestoreArray(da, mesh->lIAj, &iaj);
+    DMDAVecRestoreArray(da, mesh->lJAj, &jaj);
+    DMDAVecRestoreArray(da, mesh->lKAj, &kaj);
+
+    DMDAVecRestoreArray(da,  mesh->lAj,    &aj);
+    DMDAVecRestoreArray(fda, mesh->lCsi, &csi);
+    DMDAVecRestoreArray(fda, mesh->lEta, &eta);
+    DMDAVecRestoreArray(fda, mesh->lZet, &zet);
+
+    DMDAVecRestoreArray(da, smObject->weightAbsc[0]->tauP, &TauP0);
+    DMDAVecRestoreArray(da, smObject->weightAbsc[1]->tauP, &TauP1);
+    DMDAVecRestoreArray(da, smObject->weightAbsc[2]->tauP, &TauP2);
+
+    DMDAVecRestoreArray(da, mesh->ventMarkers, &markVent);
+    DMDAVecRestoreArray(da, mesh->lNvert, &nvert);
 
     return(0);
 }

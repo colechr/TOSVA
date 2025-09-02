@@ -45,6 +45,9 @@ vent0
 
     #C_BC_info
     ventSMBC	           fixedValue
+    GMD                    1.5
+    GSD                    2.5
+    concFrac                0.161323043
     ventSMBCVal0	   0.161323043
     ventSMBCVal1	   0.049452625
     ventSMBCVal2	   0.015827987

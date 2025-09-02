@@ -1893,5 +1893,57 @@ PetscErrorCode SolveTEqn(teqn_ *teqn)
         TeqnRK4(teqn);
     }
 
+    resetNegT(teqn);
+
     return(0);
+}
+
+//***************************************************************************************************************//
+
+PetscErrorCode resetNegT(teqn_ *teqn)
+{
+    mesh_          *mesh = teqn->access->mesh;
+
+    DM             da = mesh->da;
+
+    DMDALocalInfo info = mesh->info;
+    PetscInt      xs   = info.xs, xe = info.xs + info.xm;
+    PetscInt      ys   = info.ys, ye = info.ys + info.ym;
+    PetscInt      zs   = info.zs, ze = info.zs + info.zm;
+    PetscInt      mx   = info.mx, my = info.my, mz = info.mz;
+
+    PetscInt      lxs, lxe, lys, lye, lzs, lze;
+    PetscInt      i, j, k;
+
+    PetscReal     ***tmprt;
+
+    lxs = xs; lxe = xe; if (xs==0) lxs = xs+1; if (xe==mx) lxe = xe-1;
+    lys = ys; lye = ye; if (ys==0) lys = ys+1; if (ye==my) lye = ye-1;
+    lzs = zs; lze = ze; if (zs==0) lzs = zs+1; if (ze==mz) lze = ze-1;
+
+    DMDAVecGetArray(da, teqn->Tmprt, &tmprt);
+
+    //loop to all cells
+    for (k=lzs; k<lze; k++)
+    {
+        for (j=lys; j<lye; j++)
+        {
+            for (i=lxs; i<lxe; i++)
+            {
+
+                if (tmprt[k][j][i] < (teqn->access->constants->tRef))
+                {
+                    tmprt[k][j][i] = teqn->access->constants->tRef;
+                }
+
+            }
+        }
+    }
+
+    DMDAVecRestoreArray(da, teqn->Tmprt, &tmprt);
+
+    DMGlobalToLocalBegin(mesh->da, teqn->Tmprt, INSERT_VALUES, teqn->lTmprt);
+    DMGlobalToLocalEnd  (mesh->da, teqn->Tmprt, INSERT_VALUES, teqn->lTmprt);
+
+    return 0;
 }

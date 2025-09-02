@@ -1,0 +1,146 @@
+# OKWind Input file - sm boundary conditions
+# -------------------------------------------
+
+#internal field
+
+OGConc	150790000
+monoDFrac   0.2
+rhoPart 997.0
+GMD     0.3
+GSD     1.23
+concFrac 0.0
+internalField  uniform
+
+momentInitF0
+{
+  internalField	uniform
+  value  0.0
+  perturbations 0
+}
+
+momentInitF1
+{
+  internalField	uniform
+  value  0.0 #305.0278395613 #55.832354
+  perturbations 0
+}
+
+momentInitF2
+{
+  internalField	uniform
+  value  0.0 #96186.7842594241 #3886.11773 #0.9027452930
+  perturbations 0
+}
+
+momentInitF3
+{
+  internalField	uniform
+  value  0.0 #31356514.3994251676 #336705.679 #1.0000000000
+  perturbations 0
+}
+
+momentInitF4
+{
+  internalField	uniform
+  value  0.0 #10567605768.4573059082 #36155624.7 #1.1906393488
+  perturbations 0
+}
+
+momentInitF5
+{
+  internalField	uniform
+  value 0.0 #3681814249400.8896484375  #4762338520.646 #1.5045754883
+  perturbations 0
+}
+
+# boundary patches
+
+momentBC0
+{
+	iLeft   	 zeroGradient
+
+	iRight  	 zeroGradient
+
+	jLeft   	 zeroGradient
+
+	jRight  	 zeroGradient
+
+	kLeft   	 zeroGradient #fixedValue 1.0
+
+	kRight  	 zeroGradient
+}
+
+momentBC1
+{
+	iLeft   	 zeroGradient
+
+	iRight  	 zeroGradient
+
+	jLeft   	 zeroGradient
+
+	jRight  	 zeroGradient
+
+	kLeft   	 zeroGradient #fixedValue 1.0
+
+	kRight  	 zeroGradient
+}
+
+momentBC2
+{
+	iLeft   	 zeroGradient
+
+	iRight  	 zeroGradient
+
+	jLeft   	 zeroGradient
+
+	jRight  	 zeroGradient
+
+	kLeft   	 zeroGradient #fixedValue 1.0
+
+	kRight  	 zeroGradient
+}
+
+momentBC3
+{
+	iLeft   	 zeroGradient
+
+	iRight  	 zeroGradient
+
+	jLeft   	 zeroGradient
+
+	jRight  	 zeroGradient
+
+	kLeft   	 zeroGradient #fixedValue 1.0
+
+	kRight  	 zeroGradient
+}
+
+momentBC4
+{
+    	iLeft   	 zeroGradient
+
+	iRight  	 zeroGradient
+
+	jLeft   	 zeroGradient
+
+	jRight  	 zeroGradient
+
+	kLeft   	 zeroGradient #fixedValue 1.0
+
+	kRight  	 zeroGradient
+}
+
+momentBC5
+{
+    	iLeft   	 zeroGradient
+
+	iRight  	 zeroGradient
+
+	jLeft   	 zeroGradient
+
+	jRight  	 zeroGradient
+
+	kLeft   	 zeroGradient #fixedValue 1.0
+
+	kRight  	 zeroGradient
+}

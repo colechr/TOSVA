@@ -1,0 +1,194 @@
+NumberofBodies                      4
+
+InterpolationMethod                 CURVIB
+CURVIBInterpolationType             CurvibTrilinear
+interpolationOrder                  linear
+
+debug                               0
+dynamic                             0
+checkNormal                         0
+computeForce                        0
+writeSTL                            1
+wallShear                           0
+pressureBC                          0
+averageNormal                       0
+abl                                 0
+
+
+writeSettings
+{
+    timeStart           0
+    intervalType        timeStep
+    timeInterval        0.1
+}
+
+object0
+{
+    bodyName                        extendedMota_25.ucd
+    bodyType                        closedBody
+    thinBody                        0
+    
+    fileType 			    ucd
+    sourceFlag              0
+    	   
+    bodyMotion                      static
+    baseLocation                    (0.0 0.0 0.0)
+		                    
+
+    #closedBodyTBCInfo
+    temperatureBCSetType            setHere
+    temperatureBC                   zeroGradient
+	
+    searchCellRatio                 3
+
+    #wall model
+    wallModelU                      noSlip
+    wallModelUProp                  setHere
+    velocityBCSetType               setHere
+    velocityBC                      noSlip
+    
+    thetaRef                        295.0
+
+    procBoundCenter                 (2.15 2.0 0.0)
+    procBoundSize                   (14.3 14.0 13.2)
+}
+
+object1
+{
+
+    bodyName                        skinnyCyl1.ucd
+    bodyType                        surfaceBody
+    thinBody                        0
+    numSurfaces                     2
+    surfaceNames            ( noMouth2SkinnyCyl.ucd mouth2SkinnyCyl.ucd )
+    fileType 			    ( ucd ucd )	   
+    bodyMotion                      static
+    baseLocation                    (0.5 1.75 0.0)  	   
+
+    #source properties (surfaceBodies)
+    tSourceFlag                     (1 1)
+    fixedTemp0                         299.00 
+    fixedTemp1			    299.00 	
+
+    uSourceFlag                     (0 1)
+    uType                           fixedValue
+    fixedU1			    (1.0 0.0 0.0)
+ 
+    smSourceFlag		    (0 1)
+    smType                          fixedValue
+    GMD1                            0.5
+    GSD1                            1.5
+    concFrac1                       1.0
+	                   
+    #wall model
+    velocityBCSetType               setHere
+    velocityBC                      noSlip
+    thetaRef                        295.0
+
+    procBoundCenter                 (2.15 2.0 0.0)
+    procBoundSize                   (14.3 14.0 13.2)
+
+    startMove                       0.0
+    endMove                         1.0
+    transVelocity                   0.0
+
+    searchCellRatio                  3
+}
+
+object2
+{
+    bodyName                        cyl.ucd
+    bodyType                        closedBody #surfaceBody
+    thinBody                        0
+    numSurfaces                     2
+    surfaceNames            ( noMouth2SkinnyCyl.ucd mouth2SkinnyCyl.ucd )
+    fileType 			    ucd #( ucd ucd )	   
+    bodyMotion                      static
+    baseLocation                    (2.075 0.2 0.0)  	   
+
+    #source properties (surfaceBodies)
+    tSourceFlag                     (1 1)
+    fixedTemp0                         299.00 
+    fixedTemp1			    299.00 	
+
+    
+    #closedBodyTBCInfo
+    temperatureBCSetType            setHere
+    temperatureBC                   fixedValue
+    fixedValueT                     299.00
+
+    uSourceFlag                     (0 0)
+    IBUFlux			    4
+ 
+    smSourceFlag		    (0 0)
+    fixedSM0_1                      1.0
+    fixedSM1_1                      36.907
+    fixedSM2_1                      6978.836
+    fixedSM3_1                      6071282.42
+    fixedSM4_1                      15968426998.06
+    fixedSM5_1                      75171654331720.453
+	                   
+    #wall model
+    velocityBCSetType               setHere
+    velocityBC                      noSlip
+    thetaRef                        295.0
+
+    startMove                       0.0
+    endMove                         1.0
+    transVelocity                   0.0
+
+    procBoundCenter                 (2.15 2.0 0.0)
+    procBoundSize                   (14.3 14.0 13.2)
+
+    searchCellRatio                  3
+}
+
+object3
+{
+    bodyName                        cyl.ucd
+    bodyType                     closedBody   #surfaceBody
+    thinBody                        0
+    numSurfaces                     2
+    surfaceNames            ( noMouth2SkinnyCyl.ucd mouth2SkinnyCyl.ucd )
+    fileType 			    ucd #( ucd ucd )	   
+    bodyMotion                      static
+    baseLocation                    (3.6 1.75 0.0)  	   
+
+    #source properties (surfaceBodies)
+    tSourceFlag                     (1 1)
+    fixedTemp0                         299.00 
+    fixedTemp1			    299.00 	
+
+    #closedBodyTBCInfo
+    temperatureBCSetType            setHere
+    temperatureBC                   fixedValue
+    fixedValueT                     299.00
+
+    uSourceFlag                     (0 0)
+    IBUFlux			    4
+ 
+    smSourceFlag		    (0 0)
+    fixedSM0_1                      1.0
+    fixedSM1_1                      0.036910227 #36.907
+    fixedSM2_1                      0.007028783 #6978.836
+    fixedSM3_1                      0.0069055815 #6071282.42
+    fixedSM4_1                      0.0350031433 #15968426998.06
+    fixedSM5_1                      0.9153494934 #75171654331720.453
+	                   
+    #wall model
+    velocityBCSetType               setHere
+    velocityBC                      noSlip
+    thetaRef                        295.0
+
+    #motion properties
+    startMove                       0.0
+    endMove                         1.0
+    transVelocity                   0.0
+
+    procBoundCenter                 (2.15 2.0 0.0)
+    procBoundSize                   (14.3 14.0 13.2)
+
+    searchCellRatio                  3
+}
+
+

@@ -161,12 +161,9 @@ PetscErrorCode readIBMProperties(ibm_ *ibm)
 
         char fixedUName[256];
         char fixedTempName[256];
-        char fixedSM0Name[256];
-        char fixedSM1Name[256];
-        char fixedSM2Name[256];
-        char fixedSM3Name[256];
-        char fixedSM4Name[256];
-        char fixedSM5Name[256];
+        char fixedGMDName[256];
+        char fixedGSDName[256];
+        char fixedConcFracName[256];
 
         if (flags->isTeqnActive)
         {
@@ -176,6 +173,7 @@ PetscErrorCode readIBMProperties(ibm_ *ibm)
         if (flags->isScalarMomentsActive)
         {
             readSubDictIntArray("./IBM/IBMProperties.dat", objectName, "smSourceFlag", ibmBody->smSourceFlagSurf);
+            //printf("read %li %li %li\n", i, ibmBody->smSourceFlagSurf[0], ibmBody->smSourceFlagSurf[1]);
         }
 
         // loop through the surfaces and allocate memory
@@ -204,9 +202,28 @@ PetscErrorCode readIBMProperties(ibm_ *ibm)
             //read uSource info if needed
             if(ibmBody->uSourceFlagSurf[s] == 1)
             {
-                sprintf(fixedUName, "fixedU%ld", s);
-                readSubDictVector("./IBM/IBMProperties.dat", objectName, fixedUName, &(ibmSurface->fixedU));
-                //printf("READ %f\n", ibmSurface->fixedU.x);
+                readSubDictWord("./IBM/IBMProperties.dat", objectName, "uType", &(ibmSurface->uType));
+
+                if (ibmSurface->uType == "fixedValue")
+                {
+                    sprintf(fixedUName, "fixedU%ld", s);
+                    readSubDictVector("./IBM/IBMProperties.dat", objectName, fixedUName, &(ibmSurface->fixedU));
+                    //printf("READ %f\n", ibmSurface->fixedU.x);
+                }
+                else if (ibmSurface->uType == "bpm")
+                {
+                    sprintf(fixedUName, "fixedU%ld", s);
+                    readSubDictVector("./IBM/IBMProperties.dat", objectName, fixedUName, &(ibmSurface->fixedU));
+
+                    readSubDictInt("./IBM/IBMProperties.dat", objectName, "breathFreq", &(ibmSurface->BPM));
+                }
+                else
+                {
+                    char error[512];
+                    sprintf(error, "U surface source must be fixedValue or BPM\n");
+                    fatalErrorInFunction("readIBMProperties",  error);
+                }
+
             }
             else if(ibmBody->uSourceFlagSurf[s] == 2)
             {
@@ -232,22 +249,43 @@ PetscErrorCode readIBMProperties(ibm_ *ibm)
             //read smSource info if needed
             if (flags->isScalarMomentsActive)
             {
+                if (ibm->curvibType != "CurvibTrilinear" || ibm->curvibOrder != "linear")
+                {
+                    char error[512];
+                    sprintf(error, "SM only compatiabile with curvibTrilinear, linear\n");
+                    fatalErrorInFunction("readIBMProperties",  error);
+                }
 
                 //read tSource info if needed
                 if(ibmBody->smSourceFlagSurf[s] == 1)
                 {
-                    sprintf(fixedSM0Name, "fixedSM0_%ld", s);
-                    readSubDictDouble("./IBM/IBMProperties.dat", objectName, fixedSM0Name, &(ibmSurface->fixedSM0));
-                    sprintf(fixedSM1Name, "fixedSM1_%ld", s);
-                    readSubDictDouble("./IBM/IBMProperties.dat", objectName, fixedSM1Name, &(ibmSurface->fixedSM1));
-                    sprintf(fixedSM2Name, "fixedSM2_%ld", s);
-                    readSubDictDouble("./IBM/IBMProperties.dat", objectName, fixedSM2Name, &(ibmSurface->fixedSM2));
-                    sprintf(fixedSM3Name, "fixedSM3_%ld", s);
-                    readSubDictDouble("./IBM/IBMProperties.dat", objectName, fixedSM3Name, &(ibmSurface->fixedSM3));
-                    sprintf(fixedSM4Name, "fixedSM4_%ld", s);
-                    readSubDictDouble("./IBM/IBMProperties.dat", objectName, fixedSM4Name, &(ibmSurface->fixedSM4));
-                    sprintf(fixedSM5Name, "fixedSM5_%ld", s);
-                    readSubDictDouble("./IBM/IBMProperties.dat", objectName, fixedSM5Name, &(ibmSurface->fixedSM5));
+                    //set type of smSource
+                    readSubDictWord("./IBM/IBMProperties.dat", objectName, "smType", &(ibmSurface->smType));
+
+                    if (ibmSurface->smType == "fixedValue")
+                    {
+                        sprintf(fixedGMDName, "GMD%ld", s);
+                        readSubDictDouble("./IBM/IBMProperties.dat", objectName, fixedGMDName, &(ibmSurface->GMD));
+                        sprintf(fixedGSDName, "GSD%ld", s);
+                        readSubDictDouble("./IBM/IBMProperties.dat", objectName, fixedGSDName, &(ibmSurface->GSD));
+                        sprintf(fixedConcFracName, "concFrac%ld", s);
+                        readSubDictDouble("./IBM/IBMProperties.dat", objectName, fixedConcFracName, &(ibmSurface->concFrac));
+                    }
+                    else if (ibmSurface->smType == "HFIntubation")
+                    {
+                        //will be calculated in curvib interpolatiton
+                    }
+                    else if (ibmSurface->smType == "LFIntubation")
+                    {
+                        //will be calculated in curvib interpolatiton
+                    }
+                    else
+                    {
+                        char error[512];
+                        sprintf(error, "SM source must be fixedValue, HFIntubation, or LFIntubation\n");
+                        fatalErrorInFunction("readIBMProperties",  error);
+                    }
+
                 }
             }
 
@@ -302,14 +340,45 @@ PetscErrorCode readIBMProperties(ibm_ *ibm)
 
         if(ibmBody->bodyMotion == "sinusoidal")
         {
-            // allocate memory for ibm sinusoidal motion
-            ibmBody->ibmSine = new ibmSineMotion;
+            readSubDictInt("./IBM/IBMProperties.dat", objectName, "numSineSteps", &(ibmBody->numSineSteps));
 
-            ibmSineMotion *ibmSine = ibmBody->ibmSine;
+            // allocate memory for each sine motion object
+            ibmBody->ibmSine = new ibmSineMotion*[ibmBody->numSineSteps];
 
-            readSubDictDouble("./IBM/IBMProperties.dat", objectName, "amplitude", &(ibmSine->amplitude));
-            readSubDictDouble("./IBM/IBMProperties.dat", objectName, "frequency", &(ibmSine->frequency));
-            readSubDictVector("./IBM/IBMProperties.dat", objectName, "motionDirection", &(ibmSine->motionDir));
+            ibmBody->ct.x = 0.;
+            ibmBody->ct.y = 0.;
+            ibmBody->ct.z = 0.;
+
+            char amp[256];
+            char freq[256];
+            char start[256];
+            char end[256];
+            char dir[256];
+
+            // loop through the surfaces and allocate memory
+            for(PetscInt steps = 0; steps < ibmBody->numSineSteps; steps++)
+            {
+                // allocate memory for ibm sinusoidal motion
+                ibmBody->ibmSine[steps] = new ibmSineMotion;
+
+                ibmSineMotion *ibmSine = ibmBody->ibmSine[steps];
+
+                sprintf(amp, "amplitude%ld", steps);
+                readSubDictDouble("./IBM/IBMProperties.dat", objectName, amp, &(ibmSine->amplitude));
+
+                sprintf(freq, "frequency%ld", steps);
+                readSubDictDouble("./IBM/IBMProperties.dat", objectName, freq, &(ibmSine->frequency));
+
+                sprintf(start, "timeStart%ld", steps);
+                readSubDictDouble("./IBM/IBMProperties.dat", objectName, start, &(ibmSine->timeStart));
+
+                sprintf(end, "timeEnd%ld", steps);
+                readSubDictDouble("./IBM/IBMProperties.dat", objectName, end, &(ibmSine->timeEnd));
+
+                sprintf(dir, "motionDirection%ld", steps);
+                readSubDictVector("./IBM/IBMProperties.dat", objectName, dir, &(ibmSine->motionDir));
+            }
+
         }
 
         if(ibmBody->bodyMotion == "pitchingOscillation")
@@ -503,20 +572,40 @@ PetscErrorCode readIBMObjectMesh(ibm_ *ibm, PetscInt b)
 
   if(ibmBody->bodyMotion == "sinusoidal")
   {
-    //move the body to the initial starting position
-    ibmSineMotion   *ibmSine  = ibmBody->ibmSine;
+    PetscReal     amp = 0.;
+    PetscReal     freq = 0.;
+    PetscReal     tPrev = 0.;
+    Cmpnts        dir;
 
-    ibmSine->tPrev = clock->startTime;
+    dir.x = 0.0;
+    dir.y = 0.0;
+    dir.z = 0.0;
+
+    for(PetscInt steps = 0; steps < ibmBody->numSineSteps; steps++)
+    {
+        //set sin properties based on time
+        ibmSineMotion   *ibmSine  = ibmBody->ibmSine[steps];
+
+        ibmSine->tPrev = clock->startTime;
+
+        if (clock->time >= ibmSine->timeStart && clock->time < ibmSine->timeEnd)
+        {
+            amp = ibmSine->amplitude;
+            freq = ibmSine->frequency;
+            tPrev = ibmSine->tPrev;
+            dir = ibmSine->motionDir;
+        }
+    }
 
     for(PetscInt i = 0; i < ibMesh->nodes; i++)
     {
+        ibmBody->ct = nScale(amp * (1.0 - cos(2*M_PI * freq * tPrev)), dir);
         // find the new co-ordinate
-        ibMesh->nCoor[i] = nSum(ibMesh->nCoor[i], nScale(ibmSine->amplitude * (1.0 - cos(2*M_PI * ibmSine->frequency * ibmSine->tPrev)), ibmSine->motionDir));
+        ibMesh->nCoor[i] = nSum(ibMesh->nCoor[i], ibmBody->ct);
 
-        ibMesh->nU[i]    = nScale(2*M_PI*ibmSine->frequency*ibmSine->amplitude * sin(2*M_PI * ibmSine->frequency * ibmSine->tPrev), ibmSine->motionDir);
+        ibMesh->nU[i]    = nScale(2*M_PI*freq*amp * sin(2*M_PI * freq * tPrev), dir);
 
         ibMesh->nUPrev[i]  = nSet(ibMesh->nU[i]);
-
     }
   }
 

@@ -402,6 +402,7 @@ PetscErrorCode ReadTimeControls(clock_ *clock)
     readDictDouble("control.dat", "-timeStep",  &(clock->dt));
     readDictDouble("control.dat", "-cfl",       &(clock->cfl));
     readDictDouble("control.dat", "-endTime",   &(clock->endTime));
+    readDictDouble("control.dat", "-cflSM",     &(clock->cflSM));
 
     clock->it      = 0;
     clock->itStart = 0;

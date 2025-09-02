@@ -4154,7 +4154,73 @@ inline PetscReal quickSM(PetscReal f0, PetscReal f1, PetscReal f2, PetscReal f3,
 
 //***************************************************************************************************************//
 
-inline PetscReal upwind(PetscReal f0, PetscReal f1, PetscInt k, PetscInt j, PetscInt i, PetscReal wavespeed)
+inline PetscReal upwindSM(PetscReal f1, PetscReal f2, PetscReal wavespeed)
+{
+    PetscReal fU, fD, corr, upwind, central, C;
+
+    if(wavespeed>0)
+    {
+        fU = f1; fD = f2;
+	}
+	else
+    {
+        fU = f2; fD = f1;
+	}
+
+    if (fabs(fU-fD) < 0.001)
+    {
+        corr = 1;
+    }
+    else
+    {
+        corr = 0;
+    }
+
+    //upwind
+    upwind = fU;
+    // quickDiv
+    central = (fU + fD) / 2.0;
+
+	return (1-corr)*upwind + corr*central;
+}
+
+//***************************************************************************************************************//
+
+inline PetscReal minmodSM(PetscReal a, PetscReal b)
+{
+    if (a * b <= 0) return 0.0;
+    return (fabs(a) < fabs(b)) ? a : b;
+}
+
+//***************************************************************************************************************//
+
+inline PetscReal muscl(PetscReal f0, PetscReal f1, PetscReal f2, PetscReal f3, PetscReal wavespeed)
+{
+    PetscReal upwind, slopeL, slopeR, limitedSlope, flux;
+
+    if (wavespeed > 0) {
+        upwind = f1; // Upwind value
+        slopeL = f1 - f0;
+        slopeR = f2 - f1;
+    } else {
+        upwind = f2;
+        slopeL = f3 - f2;
+        slopeR = f2 - f1;
+    }
+
+    // Limited slope
+    limitedSlope = minmodSM(slopeL, slopeR);
+
+    // Flux: upwind + limited slope
+    flux = upwind + 0.5 * limitedSlope;
+
+    return flux;
+}
+
+
+//***************************************************************************************************************//
+
+inline PetscReal upwind(PetscReal f0, PetscReal f1, PetscReal wavespeed)
 {
     PetscReal C;
 
@@ -4172,7 +4238,6 @@ inline PetscReal upwind(PetscReal f0, PetscReal f1, PetscInt k, PetscInt j, Pets
        C
     );
 }
-
 //***************************************************************************************************************//
 
 inline Cmpnts centralUpwindVec(Cmpnts f0, Cmpnts f1, Cmpnts f2, Cmpnts f3, PetscReal wavespeed)
@@ -7122,5 +7187,18 @@ inline void mult_mats3_lin(PetscReal **inv_A,PetscReal **B,PetscInt nsupport,Pet
   return;
 }
 
+//***************************************************************************************************************//
+
+inline PetscReal findScalarMoments(PetscReal gmd, PetscReal gsd, PetscReal concFrac, PetscInt ii)
+{
+    PetscReal m_ii, log1, log2;
+
+    log1 = 0.5*((PetscScalar)ii)*((PetscScalar)ii)*log(gsd)*log(gsd);
+    log2 = ((PetscScalar)ii)*log(gmd);
+
+    m_ii = concFrac*exp(log1 + log2);
+
+    return (m_ii);
+}
 
 #endif

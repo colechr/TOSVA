@@ -418,6 +418,10 @@ PetscErrorCode SetDistributedArrays(mesh_ *mesh)
     VecDuplicate(mesh->Nvert, &(mesh->Nvert_o));
 
     VecDuplicate(mesh->Nvert, &(mesh->ventMarkers));
+    VecDuplicate(mesh->Nvert, &(mesh->bodyTracker));  VecSet(mesh->bodyTracker,  -1.0);
+    VecDuplicate(mesh->Nvert, &(mesh->surfTracker));  VecSet(mesh->surfTracker,  -1.0);
+    VecDuplicate(mesh->Nvert, &(mesh->minCell));  VecSet(mesh->minCell,  0.0);
+    VecDuplicate(mesh->Nvert, &(mesh->dmin));  VecSet(mesh->dmin,  1.0e20);
 
     VecSet(mesh->Nvert, 0.0);
     VecSet(mesh->lNvert, 0.0);
@@ -2042,9 +2046,9 @@ PetscErrorCode SetBoundingBox(mesh_ *mesh)
     PetscPrintf(mesh->MESH_COMM, "                      zmin = %lf, zmax = %lf\n", zmin, zmax);
     PetscPrintf(mesh->MESH_COMM, "Domain size         : Lx = %lf, Ly = %lf, Lz = %lf\n\n", Lx, Ly, Lz);
 
-    //set ground level 
+    //set ground level
     mesh->grndLevel = mesh->bounds.zmin;
-    
+
     return(0);
 }
 

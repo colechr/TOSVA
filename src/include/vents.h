@@ -65,8 +65,12 @@ typedef struct
     PetscReal           ventBCNutReal;     //value for Nut if fixedValue at wall
     word                ventTBC;           //Temp BC type
     PetscScalar         ventTBCVal;        //value of fixed temp or temp gradient.
-    ventSMObject        **ventSMBC;        //inflow data for vent object
-    word                smBC;              //sm BC types
+
+    ventSMObject        **ventSMBC;        //SM value for each kth order moment
+    word                smBC;              //sm BC types i.e. fixedValue, zeroGradient, periodic
+    PetscReal           GMD;               //!< geometric mean diamter in um.
+    PetscReal           GSD;               //!< geometric std. dev.
+    PetscReal           concFrac;          //!< fraction of original concnetration 0 to 1.0.
 
     PetscInt           nCellsVent; //number of cells for each vent.
     PetscScalar        ventArea; //area of each vent (m^2).

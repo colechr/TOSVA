@@ -1,0 +1,104 @@
+# OKWind Input file - sm boundary conditions
+# -------------------------------------------
+
+#internal field
+
+OGConc	100000.0
+monoDFrac   0.2
+rhoPart 997.0
+GMD     0.3
+GSD     1.23
+concFrac 0.0
+internalField  uniform
+
+# boundary patches
+
+momentBC0
+{
+	iLeft   	 zeroGradient
+
+	iRight  	 zeroGradient
+
+	jLeft   	 zeroGradient
+
+	jRight  	 zeroGradient
+
+	kLeft   	 zeroGradient #fixedValue 1.0
+
+	kRight  	 zeroGradient
+}
+
+momentBC1
+{
+	iLeft   	 zeroGradient
+
+	iRight  	 zeroGradient
+
+	jLeft   	 zeroGradient
+
+	jRight  	 zeroGradient
+
+	kLeft   	 zeroGradient #fixedValue 1.0
+
+	kRight  	 zeroGradient
+}
+
+momentBC2
+{
+	iLeft   	 zeroGradient
+
+	iRight  	 zeroGradient
+
+	jLeft   	 zeroGradient
+
+	jRight  	 zeroGradient
+
+	kLeft   	 zeroGradient #fixedValue 1.0
+
+	kRight  	 zeroGradient
+}
+
+momentBC3
+{
+	iLeft   	 zeroGradient
+
+	iRight  	 zeroGradient
+
+	jLeft   	 zeroGradient
+
+	jRight  	 zeroGradient
+
+	kLeft   	 zeroGradient #fixedValue 1.0
+
+	kRight  	 zeroGradient
+}
+
+momentBC4
+{
+    	iLeft   	 zeroGradient
+
+	iRight  	 zeroGradient
+
+	jLeft   	 zeroGradient
+
+	jRight  	 zeroGradient
+
+	kLeft   	 zeroGradient #fixedValue 1.0
+
+	kRight  	 zeroGradient
+}
+
+momentBC5
+{
+    	iLeft   	 zeroGradient
+
+	iRight  	 zeroGradient
+
+	jLeft   	 zeroGradient
+
+	jRight  	 zeroGradient
+
+	kLeft   	 zeroGradient #fixedValue 1.0
+
+	kRight  	 zeroGradient
+}

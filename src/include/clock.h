@@ -16,6 +16,7 @@ struct clock_
     PetscReal        startDt;                   //!< time step
     PetscReal        dtOld;                     //!< old time step
     PetscReal        cfl;                       //!< cfl number
+    PetscReal        cflSM;                       //!< cfl number
     PetscReal        dxMin;                     //!< min cell side size
     PetscReal        acquisitionDt;             //!< uniform dt due to acquistion if applied from the start
 
@@ -30,3 +31,7 @@ struct clock_
 PetscErrorCode adjustTimeStep(domain_ *domain);
 
 PetscErrorCode timeStepInfo(domain_ *domain, clock_ *clock, PetscReal &dxByU_min, PetscReal &maxU, cellIds &maxUCell);
+
+PetscErrorCode timeStepInfoSMSed(domain_ *domain, clock_ *clock, PetscReal &dxBygTau_min);
+
+PetscErrorCode timeStepInfoSMDev(domain_ *domain, clock_ *clock, PetscReal &dxByaTau_min);

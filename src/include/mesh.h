@@ -29,7 +29,7 @@ struct mesh_
 
     boundingBox    bounds;                     //!< domain extensions and lengths information
     PetscReal      grndLevel;                  //!< the ground level height - would be = bounds->zmin for normal simulation, but could change if using IBM
-      
+
     PetscInt       IM, JM, KM;                 //!< ncells in the GCC directions
 
     // distributed arrays
@@ -55,6 +55,10 @@ struct mesh_
 
     // vent and porous zone marker
     Vec            ventMarkers;
+    Vec                bodyTracker;
+    Vec                surfTracker;
+    Vec                minCell;
+    Vec                dmin;
 
     // periodic connectivity
     PetscInt       i_periodic, ii_periodic;

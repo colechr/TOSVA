@@ -294,6 +294,38 @@ PetscErrorCode readFields(domain_ *domain, PetscReal timeValue)
     VecLoad(mesh->Nvert,viewer);
     PetscViewerDestroy(&viewer);
 
+    if(domain->flags.isIBMActive)
+    {
+        PetscPrintf(mesh->MESH_COMM, "Reading bID...\n");
+        field = "/bID";
+        fileName = location + field;
+        PetscViewerBinaryOpen(mesh->MESH_COMM, fileName.c_str(), FILE_MODE_READ, &viewer);
+        VecLoad(mesh->bodyTracker, viewer);
+        PetscViewerDestroy(&viewer);
+
+        PetscPrintf(mesh->MESH_COMM, "Reading sID...\n");
+        field = "/sID";
+        fileName = location + field;
+        PetscViewerBinaryOpen(mesh->MESH_COMM, fileName.c_str(), FILE_MODE_READ, &viewer);
+        VecLoad(mesh->surfTracker, viewer);
+        PetscViewerDestroy(&viewer);
+
+        PetscPrintf(mesh->MESH_COMM, "Reading minCell...\n");
+        field = "/minCell";
+        fileName = location + field;
+        PetscViewerBinaryOpen(mesh->MESH_COMM, fileName.c_str(), FILE_MODE_READ, &viewer);
+        VecLoad(mesh->minCell, viewer);
+        PetscViewerDestroy(&viewer);
+
+        PetscPrintf(mesh->MESH_COMM, "Reading dmin...\n");
+        field = "/dmin";
+        fileName = location + field;
+        PetscViewerBinaryOpen(mesh->MESH_COMM, fileName.c_str(), FILE_MODE_READ, &viewer);
+        VecLoad(mesh->dmin, viewer);
+        PetscViewerDestroy(&viewer);
+
+    }
+
     // read temperature
     if(domain->flags.isTeqnActive)
     {
@@ -323,14 +355,14 @@ PetscErrorCode readFields(domain_ *domain, PetscReal timeValue)
         fileName = location + field;
         PetscViewerBinaryOpen(mesh->MESH_COMM, fileName.c_str(), FILE_MODE_READ, &viewer);
         VecLoad(smObject->quant, viewer);
-        PetscViewerDestroy(&viewer);
+        PetscViewerDestroy(&viewer);*/
 
         PetscPrintf(mesh->MESH_COMM, "Reading Dq...\n");
         field = "/Dq";
         fileName = location + field;
         PetscViewerBinaryOpen(mesh->MESH_COMM, fileName.c_str(), FILE_MODE_READ, &viewer);
         VecLoad(smObject->Dq, viewer);
-        PetscViewerDestroy(&viewer);*/
+        PetscViewerDestroy(&viewer);
 
         PetscPrintf(mesh->MESH_COMM, "Reading probI...\n");
         field = "/probI";
@@ -2243,6 +2275,20 @@ PetscErrorCode writeFields(io_ *io)
     {
         PetscPrintf(mesh->MESH_COMM, "Writing fields for time %lf\n", clock->time);
 
+        if (flags->isIBMActive)
+        {
+            ibm_       *ibm  = io->access->ibm;
+
+            if (ibm->dynamic)
+            {
+                for (PetscInt b = 0; b < ibm->numBodies; b++)
+                {
+                    PetscPrintf(mesh->MESH_COMM, "Proc bound center for body%li ... %f %f %f\n", b, ibm->ibmBody[b]->procBoundCenter.x, ibm->ibmBody[b]->procBoundCenter.y, ibm->ibmBody[b]->procBoundCenter.z);
+                }
+            }
+
+        }
+
         // current time name path
         timeName = fieldsDir + "/"  + getTimeName(clock);
 
@@ -2274,6 +2320,26 @@ PetscErrorCode writeFields(io_ *io)
             MPI_Barrier(mesh->MESH_COMM);
         }
 
+        if(flags->isIBMActive)
+        {
+            fieldName = timeName + "/bID";
+            writeBinaryField(mesh->MESH_COMM, mesh->bodyTracker, fieldName.c_str());
+            MPI_Barrier(mesh->MESH_COMM);
+
+            fieldName = timeName + "/sID";
+            writeBinaryField(mesh->MESH_COMM, mesh->surfTracker, fieldName.c_str());
+            MPI_Barrier(mesh->MESH_COMM);
+
+            fieldName = timeName + "/minCell";
+            writeBinaryField(mesh->MESH_COMM, mesh->minCell, fieldName.c_str());
+            MPI_Barrier(mesh->MESH_COMM);
+
+            fieldName = timeName + "/dmin";
+            writeBinaryField(mesh->MESH_COMM, mesh->dmin, fieldName.c_str());
+            MPI_Barrier(mesh->MESH_COMM);
+
+        }
+
         if(flags->isScalarMomentsActive)
         {
             for  (int  i=0; i < flags->isScalarMomentsActive; i++)
@@ -2288,12 +2354,12 @@ PetscErrorCode writeFields(io_ *io)
             /*// write nvert
             fieldName = timeName + "/quant";
             writeBinaryField(mesh->MESH_COMM, smObject->quant, fieldName.c_str());
-            MPI_Barrier(mesh->MESH_COMM);
+            MPI_Barrier(mesh->MESH_COMM);*/
 
-            // write nvert
+            // write Dq
             fieldName = timeName + "/Dq";
             writeBinaryField(mesh->MESH_COMM, smObject->Dq, fieldName.c_str());
-            MPI_Barrier(mesh->MESH_COMM);*/
+            MPI_Barrier(mesh->MESH_COMM);
 
             // write probI
             fieldName = timeName + "/probI";

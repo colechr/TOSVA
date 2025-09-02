@@ -116,6 +116,8 @@ typedef struct
     PetscReal     frequency;
     Cmpnts        motionDir;
     PetscReal     tPrev;
+    PetscReal     timeStart;
+    PetscReal     timeEnd;
 
 }ibmSineMotion;
 
@@ -148,15 +150,15 @@ typedef struct
     ibmMesh  *ibMsh;
 
     //ibm source variables
-    Cmpnts     fixedU;                                       //!< fixed velocity for IB sources
+    Cmpnts        fixedU;                                       //!< fixed velocity for IB sources
     PetscReal     fixedTemp;                                    //!< surface temperature of fixed temp IB sources
     PetscReal     IBTFlux;                                     //!< surface temperature of fixed temp IB sources
-    PetscReal     fixedSM0;                                       //!< fixed velocity scalar moment values at IB spurce
-    PetscReal     fixedSM1;
-    PetscReal     fixedSM2;
-    PetscReal     fixedSM3;
-    PetscReal     fixedSM4;
-    PetscReal     fixedSM5;
+    PetscReal     GSD;                                       //!< fixed scalar moment values at IB source
+    PetscReal     GMD;
+    PetscReal     concFrac;
+    PetscInt      BPM;                                        //breaths per minute from IB source
+    word          smType;                                     //type of SM IB source if applicable
+    word          uType;                                      //type of U IB source if applicable
 
 }surface;
 
@@ -209,13 +211,15 @@ typedef struct
 
     //ibm motion variables
     Cmpnts         baseLocation;
+    Cmpnts         ct;                                //base location movement during sine motion
     word           bodyMotion;
     ibmRotation    *ibmRot;
-    ibmSineMotion  *ibmSine;
+    ibmSineMotion  **ibmSine;
     ibmPitchMotion *ibmPitch;
     ibmTranslation *ibmTrans;
     PetscReal      startMove;                                 // start time for movement
     PetscReal      endMove;
+    PetscInt       numSineSteps;     //number of speed changes in sinusoidal motions
 
     //ibm search parameters
     PetscReal     searchCellRatio;
@@ -442,6 +446,8 @@ PetscErrorCode computeIBMElementNormal(ibm_ *ibm);
 PetscErrorCode recomputeIBMeshProperties(ibm_ *ibm, PetscInt b);
 
 PetscErrorCode createHalfEdgeDataStructure(ibm_ *ibm);
+
+PetscErrorCode resetDynamicBID(ibm_ *ibm);
 
 //! \brief ray casting algorithm
 PetscReal rayCastingTest(Cmpnts p, ibmMesh *ibMsh, cellIds sCell, searchBox *sBox, boundingBox *ibBox, list *searchCellList);

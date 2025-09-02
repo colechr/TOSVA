@@ -46,8 +46,6 @@ typedef struct
 
     Vec           viscPrint, divPrint, sedPrint, devPrint;
 
-    word          ddtScheme;                  //!< time derivative scheme
-
     //subaccess to back track to SMOBJ when Needed
     access_       *access;                     //!< access database
 
@@ -65,6 +63,10 @@ struct SMObj_
    PetscInt     dissWeight;      //!< weight for time average in dissipation calc.
 
    PetscReal    OGConc;         //!< original particle concentration in #/m3.
+   PetscReal    GMD;            //!< geometric mean diamter in um.
+   PetscReal    GSD;            //!< geometric std. dev.
+   PetscReal    concFrac;       //!< fraction of original concnetration 0 to 1.0.
+   PetscReal    IR;             //inhlation rate for infection %
 
    PetscReal    monoDFrac;      //!< monomer size for coagulation in meters.
 
@@ -79,7 +81,9 @@ struct SMObj_
    // initial field type readField or uniform
    word          initFieldType;
 
-
+   word          ddtScheme;                  //!< time derivative scheme
+   word          divSchemeSM;                //!< spatial derivative scheme
+   word          WaAMethod;                 //!< update weights and abscissa method
 
 };
 
@@ -94,6 +98,12 @@ PetscErrorCode InitializeSM(sm_ *sm);
 
 //! \brief Solve SM equation
 PetscErrorCode SolveSM(SMObj_ *smObject);
+
+//! \brief set up SSPRK10_4 mehtod
+PetscErrorCode SSPRK104(SMObj_ *smObject);
+
+//! \brief set up RK4 mehtod
+PetscErrorCode SMRK4(SMObj_ *smObject);
 
 //! \brief RHS of the potential scalar moment transport equation visc and div terms
 PetscErrorCode FormSM(sm_ *sm, Vec &Rhs, PetscReal scale, PetscInt ii);
@@ -130,3 +140,13 @@ PetscErrorCode sourceSMCoag(sm_ *sm, Vec &Rhs, PetscReal scale);
 
 //! \track particles deposited or exhausted
 PetscErrorCode partCount(SMObj_ *smObject);
+
+PetscErrorCode resetNegScalars(sm_ *sm, PetscInt ii);
+
+PetscErrorCode findTauP(SMObj_ *smObject);
+
+void computeStieltjesQuadrature(const std::vector<double>& moments, int N,
+                                std::vector<double>& abscissae,
+                                std::vector<double>& weights,
+                                std::vector<double>& alpha,
+                                std::vector<double>& beta);

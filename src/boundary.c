@@ -4173,57 +4173,6 @@ PetscErrorCode UpdateScalarMomentBCs(sm_ *sm, PetscInt ii)
                             continue;
                     }
 
-                    if(isIBMFluidCell(k, j, i, nvert))
-                    {
-                        //add SM sources
-                        for(PetscInt c = 0; c < ibm->numIBMFluid; c++)
-                        {
-                            if (i == ibF[c].cellId.i && j == ibF[c].cellId.j && k == ibF[c].cellId.k)
-                            {
-                                //printf("here111...................................\n");
-                                if(ibm->ibmBody[ibF[c].bodyID]->ibmControlled)
-                                {
-                                    //printf("here222...................................\n");
-                                    if(ibm->ibmBody[ibF[c].bodyID]->bodyType == "surfaceBody")
-                                    {
-                                        //printf("here333...................................\n");
-                                        //PetscPrintf(PETSC_COMM_WORLD, "SID = %li flag = %li\n", ibF[c].surfaceID, ibm->ibmBody[ibF[c].bodyID]->tSourceFlagSurf[ibF[c].surfaceID]);
-                                        if(ibm->ibmBody[ibF[c].bodyID]->smSourceFlagSurf[ibF[c].sID] == 1)
-                                        {
-                                            if (ii == 0)
-                                            {
-                                                smVal[k][j][i] = 1.0;
-                                                //printf("here555...................................\n");
-                                            }
-                                            else if (ii == 1)
-                                            {
-                                                smVal[k][j][i] = 17.8685186173;
-                                            }
-                                            else if (ii == 2)
-                                            {
-                                                smVal[k][j][i] = 398.2118967443;
-                                            }
-                                            else if (ii == 3)
-                                            {
-                                                smVal[k][j][i] = 11068.2011912980;
-                                            }
-                                            else if (ii == 4)
-                                            {
-                                                smVal[k][j][i] = 383686.9178784288;
-                                            }
-                                            else if (ii == 5)
-                                            {
-                                                smVal[k][j][i] = 16588765.6310550347;
-                                            }
-
-                                        }
-                                    }
-                                }
-
-                            }
-                        }
-
-                    }
                 }
 
                 //set ventTBC and continues to next if vent cell

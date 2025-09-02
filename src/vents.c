@@ -262,18 +262,23 @@ PetscErrorCode readVentsProperties(vents_ *vents)
 
         readSubDictWord("./vents/ventsProperties.dat", ventName, "ventSMBC", &(vents->vent[i]->smBC));
 
+        if (vents->vent[i]->smBC == "fixedValue")
+        {
+            readSubDictDouble("./vents/ventsProperties.dat", ventName, "GMD", &(vents->vent[i]->GMD));
+            readSubDictDouble("./vents/ventsProperties.dat", ventName, "GSD", &(vents->vent[i]->GSD));
+            readSubDictDouble("./vents/ventsProperties.dat", ventName, "concFrac", &(vents->vent[i]->concFrac));
+        }
+
     }
 
     for  (PetscInt  ii=0; ii < flags->isScalarMomentsActive; ii++)
     {
-        sprintf(smBC, "ventSMBC%ld", ii);
-
         PetscMalloc(sizeof(ventSMObject), &(vents->vent[i]->ventSMBC[ii]));
 
         if (vents->vent[i]->smBC == "fixedValue")
         {
-            sprintf(smBCVal, "ventSMBCVal%ld", ii);
-            readSubDictDouble("./vents/ventsProperties.dat", ventName, smBCVal, &(vents->vent[i]->ventSMBC[ii]->smBCVal));
+            vents->vent[i]->ventSMBC[ii]->smBCVal = findScalarMoments(vents->vent[i]->GMD, vents->vent[i]->GSD, vents->vent[i]->concFrac, ii);
+
         }
         else if (vents->vent[i]->smBC == "zeroGradient")
         {
@@ -589,12 +594,18 @@ PetscErrorCode readVentsProperties(vents_ *vents)
 
                  }
 
-                 if (vents->vent[q]->dir == "outlet") // || (vents->vent[q]->dir == "leak" && vents->roomPressure == "pos"))
+                 else if (vents->vent[q]->dir == "outlet") // || (vents->vent[q]->dir == "leak" && vents->roomPressure == "pos"))
                  {
                      vents->vent[q]->ventBCVec.x = 0;
                      vents->vent[q]->ventBCVec.y = -(vents->vent[q]->ventDesiredFlux / vents->vent[q]->ventArea);
                      vents->vent[q]->ventBCVec.z = 0;
 
+                 }
+                 else
+                 {
+                     char error[512];
+                     sprintf(error, "unknown dir for vent %li U. Only inlet and outlet available", q);
+                     fatalErrorInFunction("ventSetAndPrint",  error);
                  }
 
               }
@@ -612,13 +623,18 @@ PetscErrorCode readVentsProperties(vents_ *vents)
                       vents->vent[q]->ventBCVec.z = 0;
 
                   }
-
-                  if (vents->vent[q]->dir == "outlet") // || (vents->vent[q]->dir == "leak" && vents->roomPressure == "pos"))
+                  else if (vents->vent[q]->dir == "outlet") // || (vents->vent[q]->dir == "leak" && vents->roomPressure == "pos"))
                   {
                       vents->vent[q]->ventBCVec.x = 0;
                       vents->vent[q]->ventBCVec.y = (vents->vent[q]->ventDesiredFlux / vents->vent[q]->ventArea);
                       vents->vent[q]->ventBCVec.z = 0;
 
+                  }
+                  else
+                  {
+                      char error[512];
+                      sprintf(error, "unknown dir for vent %li U. Only inlet and outlet available", q);
+                      fatalErrorInFunction("ventSetAndPrint",  error);
                   }
 
                }
@@ -636,13 +652,18 @@ PetscErrorCode readVentsProperties(vents_ *vents)
                       vents->vent[q]->ventBCVec.z = (vents->vent[q]->ventDesiredFlux / vents->vent[q]->ventArea);
 
                   }
-
-                  if (vents->vent[q]->dir == "outlet") // || (vents->vent[q]->dir == "leak" && vents->roomPressure == "pos"))
+                  else if (vents->vent[q]->dir == "outlet") // || (vents->vent[q]->dir == "leak" && vents->roomPressure == "pos"))
                   {
                       vents->vent[q]->ventBCVec.x = 0;
                       vents->vent[q]->ventBCVec.y = 0;
                       vents->vent[q]->ventBCVec.z = -(vents->vent[q]->ventDesiredFlux / vents->vent[q]->ventArea);
 
+                  }
+                  else
+                  {
+                      char error[512];
+                      sprintf(error, "unknown dir for vent %li U. Only inlet and outlet available", q);
+                      fatalErrorInFunction("ventSetAndPrint",  error);
                   }
 
               }
@@ -660,13 +681,18 @@ PetscErrorCode readVentsProperties(vents_ *vents)
                        vents->vent[q]->ventBCVec.z = -(vents->vent[q]->ventDesiredFlux / vents->vent[q]->ventArea);
 
                    }
-
-                   if (vents->vent[q]->dir == "outlet") // || (vents->vent[q]->dir == "leak" && vents->roomPressure == "pos"))
+                   else if (vents->vent[q]->dir == "outlet") // || (vents->vent[q]->dir == "leak" && vents->roomPressure == "pos"))
                    {
                        vents->vent[q]->ventBCVec.x = 0;
                        vents->vent[q]->ventBCVec.y = 0;
                        vents->vent[q]->ventBCVec.z = (vents->vent[q]->ventDesiredFlux / vents->vent[q]->ventArea);
 
+                   }
+                   else
+                   {
+                       char error[512];
+                       sprintf(error, "unknown dir for vent %li U. Only inlet and outlet available", q);
+                       fatalErrorInFunction("ventSetAndPrint",  error);
                    }
 
                }
@@ -684,13 +710,18 @@ PetscErrorCode readVentsProperties(vents_ *vents)
                       vents->vent[q]->ventBCVec.z = 0;
 
                   }
-
-                  if (vents->vent[q]->dir == "outlet") // || (vents->vent[q]->dir == "leak" && vents->roomPressure == "pos"))
+                  else if (vents->vent[q]->dir == "outlet") // || (vents->vent[q]->dir == "leak" && vents->roomPressure == "pos"))
                   {
                       vents->vent[q]->ventBCVec.x = -(vents->vent[q]->ventDesiredFlux / vents->vent[q]->ventArea);
                       vents->vent[q]->ventBCVec.y = 0;
                       vents->vent[q]->ventBCVec.z = 0;
 
+                  }
+                  else
+                  {
+                      char error[512];
+                      sprintf(error, "unknown dir for vent %li U. Only inlet and outlet available", q);
+                      fatalErrorInFunction("ventSetAndPrint",  error);
                   }
 
               }
@@ -708,13 +739,18 @@ PetscErrorCode readVentsProperties(vents_ *vents)
                        vents->vent[q]->ventBCVec.z = 0;
 
                    }
-
-                   if (vents->vent[q]->dir == "outlet")// || (vents->vent[q]->dir == "leak" && vents->roomPressure == "pos"))
+                   else if (vents->vent[q]->dir == "outlet")// || (vents->vent[q]->dir == "leak" && vents->roomPressure == "pos"))
                    {
                        vents->vent[q]->ventBCVec.x = (vents->vent[q]->ventDesiredFlux / vents->vent[q]->ventArea);
                        vents->vent[q]->ventBCVec.y = 0;
                        vents->vent[q]->ventBCVec.z = 0;
 
+                   }
+                   else
+                   {
+                       char error[512];
+                       sprintf(error, "unknown dir for vent %li U. Only inlet and outlet available", q);
+                       fatalErrorInFunction("ventSetAndPrint",  error);
                    }
 
                }
@@ -738,13 +774,18 @@ PetscErrorCode readVentsProperties(vents_ *vents)
                      ifPtr->meanU.z = 0;
                      ifPtr->Urms = ifPtr->meanU.y * ifPtr->TI;
                  }
-
-                 if (vents->vent[q]->dir == "outlet") // || (vents->vent[q]->dir == "leak" && vents->roomPressure == "pos"))
+                 else if (vents->vent[q]->dir == "outlet") // || (vents->vent[q]->dir == "leak" && vents->roomPressure == "pos"))
                  {
                      ifPtr->meanU.x = 0;
                      ifPtr->meanU.y = -ifPtr->desiredFlux / vents->vent[q]->ventArea;
                      ifPtr->meanU.z = 0;
                      ifPtr->Urms = -ifPtr->meanU.y * ifPtr->TI;
+                 }
+                 else
+                 {
+                     char error[512];
+                     sprintf(error, "unknown dir for vent %li U. Only inlet and outlet available", q);
+                     fatalErrorInFunction("ventSetAndPrint",  error);
                  }
 
               }
@@ -762,13 +803,18 @@ PetscErrorCode readVentsProperties(vents_ *vents)
                       ifPtr->meanU.z = 0;
                       ifPtr->Urms = -ifPtr->meanU.y * ifPtr->TI;
                   }
-
-                  if (vents->vent[q]->dir == "outlet") // || (vents->vent[q]->dir == "leak" && vents->roomPressure == "pos"))
+                  else if (vents->vent[q]->dir == "outlet") // || (vents->vent[q]->dir == "leak" && vents->roomPressure == "pos"))
                   {
                       ifPtr->meanU.x = 0;
                       ifPtr->meanU.y = ifPtr->desiredFlux / vents->vent[q]->ventArea;
                       ifPtr->meanU.z = 0;
                       ifPtr->Urms = ifPtr->meanU.y * ifPtr->TI;
+                  }
+                  else
+                  {
+                      char error[512];
+                      sprintf(error, "unknown dir for vent %li U. Only inlet and outlet available", q);
+                      fatalErrorInFunction("ventSetAndPrint",  error);
                   }
 
                }
@@ -786,13 +832,18 @@ PetscErrorCode readVentsProperties(vents_ *vents)
                       ifPtr->meanU.z = ifPtr->desiredFlux / vents->vent[q]->ventArea;
                       ifPtr->Urms = ifPtr->meanU.z * ifPtr->TI;
                   }
-
-                  if (vents->vent[q]->dir == "outlet") // || (vents->vent[q]->dir == "leak" && vents->roomPressure == "pos"))
+                  else if (vents->vent[q]->dir == "outlet") // || (vents->vent[q]->dir == "leak" && vents->roomPressure == "pos"))
                   {
                       ifPtr->meanU.x = 0;
                       ifPtr->meanU.y = 0;
                       ifPtr->meanU.z = -ifPtr->desiredFlux / vents->vent[q]->ventArea;
                       ifPtr->Urms = -ifPtr->meanU.z * ifPtr->TI;
+                  }
+                  else
+                  {
+                      char error[512];
+                      sprintf(error, "unknown dir for vent %li U. Only inlet and outlet available", q);
+                      fatalErrorInFunction("ventSetAndPrint",  error);
                   }
 
               }
@@ -810,13 +861,18 @@ PetscErrorCode readVentsProperties(vents_ *vents)
                        ifPtr->meanU.z = -ifPtr->desiredFlux / vents->vent[q]->ventArea;
                        ifPtr->Urms = -ifPtr->meanU.z * ifPtr->TI;
                    }
-
-                   if (vents->vent[q]->dir == "outlet") // || (vents->vent[q]->dir == "leak" && vents->roomPressure == "pos"))
+                   else if (vents->vent[q]->dir == "outlet") // || (vents->vent[q]->dir == "leak" && vents->roomPressure == "pos"))
                    {
                        ifPtr->meanU.x = 0;
                        ifPtr->meanU.y = 0;
                        ifPtr->meanU.z = ifPtr->desiredFlux / vents->vent[q]->ventArea;
                        ifPtr->Urms = ifPtr->meanU.z * ifPtr->TI;
+                   }
+                   else
+                   {
+                       char error[512];
+                       sprintf(error, "unknown dir for vent %li U. Only inlet and outlet available", q);
+                       fatalErrorInFunction("ventSetAndPrint",  error);
                    }
 
                }
@@ -834,15 +890,20 @@ PetscErrorCode readVentsProperties(vents_ *vents)
                       ifPtr->meanU.z = 0;
                       ifPtr->Urms = ifPtr->meanU.x * ifPtr->TI;
                   }
-
-                  if (vents->vent[q]->dir == "outlet") // || (vents->vent[q]->dir == "leak" && vents->roomPressure == "pos"))
+                  else if (vents->vent[q]->dir == "outlet") // || (vents->vent[q]->dir == "leak" && vents->roomPressure == "pos"))
                   {
                       ifPtr->meanU.x = -ifPtr->desiredFlux / vents->vent[q]->ventArea;
                       ifPtr->meanU.y = 0;
                       ifPtr->meanU.z = 0;
                       ifPtr->Urms = -ifPtr->meanU.x * ifPtr->TI;
                   }
-         }
+                  else
+                  {
+                      char error[512];
+                      sprintf(error, "unknown dir for vent %li U. Only inlet and outlet available", q);
+                      fatalErrorInFunction("ventSetAndPrint",  error);
+                  }
+             }
 
              if (vents->vent[q]->face == "kRight")
              {
@@ -858,13 +919,18 @@ PetscErrorCode readVentsProperties(vents_ *vents)
                    ifPtr->meanU.z = 0;
                    ifPtr->Urms = -ifPtr->meanU.x * ifPtr->TI;
                }
-
-               if (vents->vent[q]->dir == "outlet")// || (vents->vent[q]->dir == "leak" && vents->roomPressure == "pos"))
+               else if (vents->vent[q]->dir == "outlet")// || (vents->vent[q]->dir == "leak" && vents->roomPressure == "pos"))
                {
                    ifPtr->meanU.x = ifPtr->desiredFlux / vents->vent[q]->ventArea;
                    ifPtr->meanU.y = 0;
                    ifPtr->meanU.z = 0;
                    ifPtr->Urms = ifPtr->meanU.x * ifPtr->TI;
+               }
+               else
+               {
+                   char error[512];
+                   sprintf(error, "unknown dir for vent %li U. Only inlet and outlet available", q);
+                   fatalErrorInFunction("ventSetAndPrint",  error);
                }
 
            }

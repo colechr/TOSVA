@@ -6,6 +6,7 @@
 -startFrom                 startTime
 -startTime                 0
 -endTime                   900
+-cflSM                     0.1
 -cfl                       0.8
 -adjustTimeStep            1
 -timeStep                  1.0
@@ -14,7 +15,7 @@
 # Write Data
 # ---------------------------------
 -intervalType              adjustableTime
--timeInterval              10.0
+-timeInterval              0.5
 -purgeWrite                0
 
 # Solution
@@ -44,6 +45,8 @@
 -dTdtScheme                backwardEuler
 -dSMdtScheme		   rungeKutta4
 -divScheme                 centralUpwind
+-divSchemeSM               muscl
+-WaAMethod                 PD
 
 # Wind Turbine
 # ---------------------------------
@@ -84,3 +87,4 @@
 -depoSource               1
 -sediFlux                 1
 -deviFlux                 1
+-iRate                    0.0

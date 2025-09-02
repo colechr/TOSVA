@@ -81,7 +81,7 @@ PetscErrorCode SetInitialField(domain_ *domain)
         }
 
         // read scalar moment fieldsDir
-        char momentInitF[256];
+        PetscReal momentInitF = 0.;
         for  (PetscInt  ii=0; ii < flags->isScalarMomentsActive; ii++)
         {
             if (ii == 0)
@@ -90,11 +90,47 @@ PetscErrorCode SetInitialField(domain_ *domain)
                 readDictDouble(filenameSM.c_str(), "monoDFrac", &(domain[d].smObject->monoDFrac));
                 readDictDouble(filenameSM.c_str(), "rhoPart", &(domain[d].smObject->rhoPart));
                 readDictWord(filenameSM.c_str(), "internalField", &(domain[d].smObject->initFieldType));
+                readDictDouble(filenameSM.c_str(), "GMD", &(domain[d].smObject->GMD));
+                readDictDouble(filenameSM.c_str(), "GSD", &(domain[d].smObject->GSD));
+                readDictDouble(filenameSM.c_str(), "concFrac", &(domain[d].smObject->concFrac));
+
+                if (domain[d].smObject->initFieldType == "uniform")
+                {
+                    readDictDouble(filenameSM.c_str(), "GMD", &(domain[d].smObject->GMD));
+                    readDictDouble(filenameSM.c_str(), "GSD", &(domain[d].smObject->GSD));
+                    readDictDouble(filenameSM.c_str(), "concFrac", &(domain[d].smObject->concFrac));
+                }
+
+                if(domain[d].clock->startFrom == "latestTime")
+                {
+                    if(flags->isScalarMomentsActive)
+                    if(domain[d].smObject->initFieldType != "readField")
+                    {
+                        char error[512];
+                        sprintf(error, "-startFrom latestTime only available with readField option in boundary/SM");
+                        fatalErrorInFunction("SetInitialField", error);
+                    }
+                }
             }
 
-            sprintf(momentInitF, "momentInitF%ld", ii);
+            if (domain[d].smObject->initFieldType == "uniform")
+            {
+                momentInitF = findScalarMoments(domain[d].smObject->GMD, domain[d].smObject->GSD, domain[d].smObject->concFrac, ii);
+
+                //printf("%f %li\n", momentInitF, ii);
+            }
+            //sprintf(momentInitF, "momentInitF%ld", ii);
             //readSubDictWord(filenameSM.c_str(), momentInitF, "internalField", &(domain[d].smObject->sm[ii]->initFieldType));
             SetInitialFieldSM(domain[d].smObject->sm[ii], momentInitF, ii);
+
+            if (ii == flags->isScalarMomentsActive - 1)
+            {
+                if (flags->isCoagSourceActive || flags->isDepoSourceActive || flags->isSediFluxActive || flags->isDeviFluxActive)
+                {
+                    quickUpdateWeightsAndAbscissi(domain[d].smObject);
+                }
+            }
+
         }
 
         // if readFields is on, read all the fields
@@ -528,7 +564,7 @@ PetscErrorCode SetInitialFieldT(teqn_ *teqn)
 
 //***************************************************************************************************************//
 
-PetscErrorCode SetInitialFieldSM(sm_ *sm, char *momentInitF, PetscInt ii)
+PetscErrorCode SetInitialFieldSM(sm_ *sm, PetscReal momentInitF, PetscInt ii)
 {
     clock_ *clock     = sm->access->clock;
     mesh_  *mesh      = sm->access->mesh;
@@ -559,10 +595,8 @@ PetscErrorCode SetInitialFieldSM(sm_ *sm, char *momentInitF, PetscInt ii)
     }
     else if (smObject->initFieldType == "uniform")
     {
-        PetscReal smRef;
-        readSubDictDouble(filename.c_str(), momentInitF, "value", &(smRef));
         PetscPrintf(mesh->MESH_COMM, "Setting initial field for SM%li: %s\n\n", ii, smObject->initFieldType.c_str());
-        SetUniformFieldSM(sm, smRef, ii);
+        SetUniformFieldSM(sm, momentInitF, ii);
     }
 
     else
@@ -1098,7 +1132,7 @@ PetscErrorCode SpreadInletFlowU(ueqn_ *ueqn)
         // clear the vector indices
         std::vector<std::vector<Cmpnts>> ().swap(lpatchField);
         std::vector<std::vector<Cmpnts>> ().swap(gpatchField);
-		
+
     }
     else if
     (
@@ -1649,82 +1683,7 @@ PetscErrorCode SetUniformFieldSM(sm_ *sm, PetscReal &smRef, PetscInt ii)
         {
             for(i=lxs; i<lxe; i++)
             {
-
-                if(sm->access->flags->isIBMActive)
-                {
-                    ibmFluidCell  *ibF = ibm->ibmFCells;
-
-                    if(isIBMFluidCell(k, j, i, nvert))
-                    {
-
-                        for(PetscInt c = 0; c < ibm->numIBMFluid; c++)
-                        {
-                            if (i == ibF[c].cellId.i && j == ibF[c].cellId.j && k == ibF[c].cellId.k)
-                            {
-                                //printf("here111...................................\n");
-                                if(ibm->ibmBody[ibF[c].bodyID]->ibmControlled)
-                                {
-                                    //printf("here222...................................\n");
-                                    if(ibm->ibmBody[ibF[c].bodyID]->bodyType == "surfaceBody")
-                                    {
-                                        //printf("here333...................................\n");
-                                        //PetscPrintf(PETSC_COMM_WORLD, "SID = %li flag = %li\n", ibF[c].surfaceID, ibm->ibmBody[ibF[c].bodyID]->tSourceFlagSurf[ibF[c].surfaceID]);
-                                        if(ibm->ibmBody[ibF[c].bodyID]->smSourceFlagSurf[ibF[c].sID] == 1)
-                                        {
-                                            //printf("here444...................................\n");
-                                            if (ii == 0)
-                                            {
-                                                smVal[k][j][i] = 1.0;
-                                                //printf("here555...................................\n");
-                                            }
-                                            else if (ii == 1)
-                                            {
-                                                smVal[k][j][i] = 17.8685186173;
-                                            }
-                                            else if (ii == 2)
-                                            {
-                                                smVal[k][j][i] = 398.2118967443;
-                                            }
-                                            else if (ii == 3)
-                                            {
-                                                smVal[k][j][i] = 11068.2011912980;
-                                            }
-                                            else if (ii == 4)
-                                            {
-                                                smVal[k][j][i] = 383686.9178784288;
-                                            }
-                                            else if (ii == 5)
-                                            {
-                                                smVal[k][j][i] = 16588765.6310550347;
-                                            }
-
-                                        }
-                                        else
-                                        {
-                                            smVal[k][j][i] = smRef;
-                                        }
-                                    }
-                                    else
-                                    {
-                                        smVal[k][j][i] = smRef;
-                                    }
-                                }
-
-                            }
-                        }
-
-                    }
-                    else
-                    {
-                         smVal[k][j][i] = smRef;
-                    }
-                }
-                else
-                {
-                     smVal[k][j][i] = smRef;
-                }
-
-
+                smVal[k][j][i] = smRef;
             }
         }
     }
