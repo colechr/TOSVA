@@ -15,7 +15,7 @@
 # Write Data
 # ---------------------------------
 -intervalType              adjustableTime
--timeInterval              15.0
+-timeInterval              60.0
 -purgeWrite                0
 
 # Solution

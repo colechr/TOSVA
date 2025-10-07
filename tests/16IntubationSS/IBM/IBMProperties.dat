@@ -1,0 +1,496 @@
+
+NumberofBodies                      14
+
+InterpolationMethod                 CURVIB
+CURVIBInterpolationType             CurvibTrilinear
+interpolationOrder                  linear
+
+debug                               0
+dynamic                             1
+checkNormal                         0
+computeForce                        0
+writeSTL                            0
+wallShear                           0
+pressureBC                          0
+averageNormal                       0
+abl                                 0
+
+
+writeSettings
+{
+    timeStart           0
+    intervalType        timeStep
+    timeInterval        15.0
+}
+
+#ibm object properties
+
+
+object0
+{
+    bodyName                        bedBlock.ucd
+    bodyType                        closedBody
+    thinBody                        0
+    fileType 			    ucd
+    bodyMotion                      static
+    baseLocation     	            (1.95 1.25 -0.0)
+
+    #source proprties 
+    tSourceFlag                     0 #(0 0)
+    uSourceFlag                     0 #(0 0)
+    smSourceFlag                    0 #(0 0)
+
+    #wall model
+    velocityBCSetType               setHere
+    velocityBC                      noSlip
+    temperatureBCSetType            setHere
+    temperatureBC                   zeroGradient
+
+    searchCellRatio                 3
+
+    #procBounds          
+    procBoundCenter                 (2.325 2.25 0.4) 
+    procBoundSize                   (0.91 2.16 0.975)
+}
+
+object1
+{
+    bodyName                        ep
+    bodyType                        surfaceBody
+    thinBody                        0
+    numSurfaces                     2
+    surfaceNames            ( noMouthMaleXPosSmooth.ucd mouthMaleXPosSmooth.ucd ) 
+    fileType                        ( ucd ucd )  
+    bodyMotion                      sinusoidal
+    baseLocation     	            (1.71 1.55 0.0)
+
+    #source properties (surfaceBodies)   
+    velocityBCSetType               setHere
+    velocityBC                      noSlip
+    temperatureBCSetType            setHere
+    temperatureBC                   fixedValue
+    fixedValueT                     299.00
+                                                                 
+    tSourceFlag                     (1 1)                                                       
+    fixedTemp0                      302.00   
+    fixedTemp1                      302.00                                         
+
+    uSourceFlag                     (0 1)
+    uType                           bpm 
+    breathFreq                      30               
+    fixedU1                         (0.24 0.0 0.0)
+
+    smSourceFlag                    (0 0)  
+
+    #wall model                                                                                         
+    velocityBCSetType               setHere                
+    velocityBC                      noSlip 
+
+    #motion properties
+    numSineSteps                     1
+    amplitude0                       0.5
+    frequency0                       0.46
+    motionDirection0                 (0.0 1.0 0.0)
+    timeStart0                       0.0  
+    timeEnd0                         1668.0
+
+    #procBounds
+    procBoundCenter                 (1.71 1.55 0.867)
+    procBoundSize                   (0.479 0.821 1.864)
+
+    searchCellRatio                 3
+}
+
+object2
+{
+    bodyName                        rt
+    bodyType                        surfaceBody
+    thinBody                        0
+    numSurfaces                     2
+    surfaceNames            ( noMouthMaleXPosSmooth.ucd mouthMaleXPosSmooth.ucd )
+    fileType 			    ( ucd ucd )
+    bodyMotion                      static
+    baseLocation     	            (1.71 3.3 0.0)
+
+    #source properties (surfaceBodies)                                                                    
+    tSourceFlag                     (1 1)                                                       
+    fixedTemp0                      299.00   
+    fixedTemp1                      299.00                                          
+
+
+    uSourceFlag                     (0 1)
+    uType                           bpm
+    breathFreq                      30                                            
+    fixedU1                         (0.24 0.0 0.0)
+
+    smSourceFlag                    (0 0)                                                    
+
+    #wall model                                                                                 
+    velocityBCSetType               setHere                
+    velocityBC                      noSlip 
+
+    #procBounds
+    procBoundCenter                 (1.71 3.3 0.867)
+    procBoundSize                   (0.429 0.771 1.864)
+
+    searchCellRatio                 3
+}
+
+object3
+{
+    bodyName                        rnTwo
+    bodyType                        surfaceBody
+    thinBody                        0
+    numSurfaces                     2
+    surfaceNames            ( noMouthMaleXPosSmooth.ucd mouthMaleXPosSmooth.ucd )
+    fileType 			    ( ucd ucd )
+    bodyMotion                      sinusoidal
+    baseLocation     	            (1.21 0.85 0.0)
+
+    #source properties (surfaceBodies)                                                                    
+    tSourceFlag                     (1 1)                                                       
+    fixedTemp0                      302.00   
+    fixedTemp1                      302.00                                          
+
+
+    uSourceFlag                     (0 1)
+    uType                           bpm
+    breathFreq                      30                                            
+    fixedU1                         (0.24 0.0 0.0)
+
+    smSourceFlag                    (0 0)                                                    
+
+    #wall model                                                                                         
+    velocityBCSetType               setHere                
+    velocityBC                      noSlip 
+
+    #motion properties
+    numSineSteps                     1
+    amplitude0                       1.0
+    frequency0                       0.23
+    motionDirection0                 (1.0 0.0 0.0)
+    timeStart0                       0.0  
+    timeEnd0                         1668.0
+
+    #procBounds
+    procBoundCenter                 (1.21 0.85 0.867)
+    procBoundSize                   (0.479 0.821 1.864)
+
+    searchCellRatio                 3
+}
+
+
+object4
+{
+    bodyName                        rnOne
+    bodyType                        surfaceBody
+    thinBody                        0
+    numSurfaces                     2
+    surfaceNames            ( noMouthMaleXNegSmooth.ucd mouthMaleXNegSmooth.ucd )
+    fileType 			    ( ucd ucd )
+    bodyMotion                      static
+    baseLocation     	            (2.958 2.01 0.0)  #2.958 #2.01 #0.0
+
+    #source properties (surfaceBodies)                                                                    
+    tSourceFlag                     (1 1)                                                       
+    fixedTemp0                      299.00   
+    fixedTemp1                      299.00                                          
+    uSourceFlag                     (0 0) 
+    uType                           bpm
+    breathFreq                      30                                           
+    fixedU1                         (-0.24 0.0 0.0)
+
+    smSourceFlag                    (0 0)                                                    
+
+    #wall model                                                                                          
+    velocityBCSetType               setHere                
+    velocityBC                      noSlip
+
+    #motion properties
+    numSineSteps                     1
+    amplitude0                       0.5
+    frequency0                       0.33
+    motionDirection0              (0.0 1.0 0.0)
+    timeStart0                       0.0  
+    timeEnd0                         1668.0
+
+    #procBounds
+    procBoundCenter                 (2.958 2.01 0.867)
+    procBoundSize                   (0.479 0.821 1.864)
+
+    searchCellRatio                 3
+}
+
+object5
+{
+    bodyName                        patient
+    bodyType                        surfaceBody
+    thinBody                        0
+    numSurfaces                     2
+    surfaceNames            ( noMouthMaleZPosSmooth.ucd mouthMaleZPosSmooth.ucd )
+    fileType 			    ( ucd ucd )
+    bodyMotion                      static
+    baseLocation     	            (2.33 2.3 0.8)
+
+    #source properties (surfaceBodies)                                                                    
+    tSourceFlag                     (1 1)                                                       
+    fixedTemp0                      299.00   
+    fixedTemp1                      299.00                                          
+
+
+    uSourceFlag                     (0 1)  
+    uType                           fixedValue                                       
+    fixedU1                         (0.0 0.0 0.24)
+
+    smSourceFlag                    (0 1)
+    smType                          HFIntubation                                                    
+
+    #wall model                                                                                           
+    velocityBCSetType               setHere                
+    velocityBC                      noSlip 
+
+    #procBounds
+    procBoundCenter                 (2.33 2.3 0.9495)
+    procBoundSize                   (0.771 1.864 0.429)
+
+    searchCellRatio                 3
+}
+
+object6
+{
+    bodyName                        ventBlockLarge.ucd
+    bodyType                        closedBody
+    thinBody                        0
+    fileType 			    ucd
+    sourceFlag                      0
+    bodyMotion                      static
+    baseLocation     	            (0.2 3.07 0.0)
+
+    #source proprties 
+    tSourceFlag                     0
+
+    #closedBodyTBCInfo                                                             
+    temperatureBCSetType            setHere 
+    temperatureBC                   zeroGradient
+
+    #wall model
+    velocityBCSetType               setHere
+    velocityBC                      noSlip
+
+    searchCellRatio                 3
+
+    #procBounds          
+    procBoundCenter                 (0.625 3.27 0.75) 
+    procBoundSize                   (1.05 0.8 1.9)
+}
+
+object7
+{
+    bodyName                        ventBlock.ucd
+    bodyType                        closedBody
+    thinBody                        0
+    fileType 			    ucd
+    sourceFlag                      0
+    bodyMotion                      static
+    baseLocation     	            (3.8 3.07 0.0)
+
+    #source proprties 
+    tSourceFlag                     0
+
+    #closedBodyTBCInfo                                                             
+    temperatureBCSetType            setHere 
+    temperatureBC                   zeroGradient
+
+    #wall model
+    velocityBCSetType               setHere
+    velocityBC                      noSlip
+
+    #motion properties
+    numSineSteps                     1
+    amplitude0                       1.0
+    frequency0                       0.23
+    motionDirection0              (0.0 -1.0 0.0)
+    timeStart0                       0.0  
+    timeEnd0                         1668.0
+
+    searchCellRatio                 3
+
+    #procBounds          
+    procBoundCenter                 (4.1 2.77 0.6)   #(4.1 3.27 0.6) 
+    procBoundSize                   (0.82 0.82 1.42)               #(0.62 0.42 1.22)
+}
+
+object8
+{
+    bodyName                        EMSRight
+    bodyType                        surfaceBody
+    thinBody                        0
+    numSurfaces                     2
+    surfaceNames            ( simpleEMSNoScreen.ucd simpleEMSScreen.ucd )
+    fileType 			    ( ucd ucd )
+    bodyMotion                      static
+    baseLocation     	            (3.0 3.0 1.25)
+
+    #source properties (surfaceBodies)                                                                    
+    tSourceFlag                     (0 1)                                                        
+    fixedTemp1                      304.00                                          
+
+    uSourceFlag                     (0 0)  
+
+    smSourceFlag                    (0 0)                                                   
+
+    #wall model                                                                                           
+    velocityBCSetType               setHere                
+    velocityBC                      noSlip 
+
+    #procBounds
+    procBoundCenter                 (3.15 3.3 2.0)
+    procBoundSize                   (0.56 0.86 2.0)
+
+    searchCellRatio                 3
+}
+
+object9
+{
+    bodyName                        noLights.ucd
+    bodyType                        closedBody
+    thinBody                        0
+    fileType 			    ucd
+    sourceFlag                      0
+    bodyMotion                      static
+    baseLocation     	            (0.0 0.0 2.61)
+
+    #source proprties 
+    tSourceFlag                     0
+
+    #closedBodyTBCInfo                                                             
+    temperatureBCSetType            setHere 
+    temperatureBC                   zeroGradient
+
+    #wall model
+    velocityBCSetType               setHere
+    velocityBC                      noSlip
+
+    searchCellRatio                 3
+
+    #procBounds          
+    procBoundCenter                 (2.3 1.835 2.75)   #(4.1 3.27 0.6) 
+    procBoundSize                   (5.0 4.0 0.3)               #(0.62 0.42 1.22)
+}
+
+
+object10
+{
+    bodyName                        light1.ucd
+    bodyType                        closedBody
+    thinBody                        0
+    fileType 			    ucd
+    sourceFlag                      0
+    bodyMotion                      static
+    baseLocation     	            (0.0 0.0 2.61)
+
+    #source proprties 
+    tSourceFlag                     1
+
+    #closedBodyTBCInfo                                                             
+    temperatureBCSetType            setHere 
+    temperatureBC                   fixedValue
+    fixedValueT                     304.0
+
+    #wall model
+    velocityBCSetType               setHere
+    velocityBC                        noSlip
+
+    searchCellRatio                 3
+
+    #procBounds
+    procBoundCenter               (1.3 2.37 2.75)
+    procBoundSize                 (1.3 1.3 0.5) 
+}
+
+object11
+{
+    bodyName                        light2.ucd
+    bodyType                        closedBody
+    thinBody                        0
+    fileType 			    ucd
+    sourceFlag                      0
+    bodyMotion                      static
+    baseLocation     	            (0.0 0.0 2.61)
+
+    #source proprties 
+    tSourceFlag                     1
+
+    #closedBodyTBCInfo                                                             
+    temperatureBCSetType            setHere 
+    temperatureBC                   fixedValue
+    fixedValueT                     304.0
+
+    #wall model
+    velocityBCSetType               setHere
+    velocityBC                        noSlip
+
+    searchCellRatio                 3
+
+    #procBounds
+    procBoundCenter               (3.3 2.37 2.75)
+    procBoundSize                 (1.3 1.3 0.5) 
+}
+
+object12
+{
+    bodyName                        light3.ucd
+    bodyType                        closedBody
+    thinBody                        0
+    fileType 			    ucd
+    sourceFlag                      0
+    bodyMotion                      static
+    baseLocation     	            (0.0 0.0 2.61)
+
+    #source proprties 
+    tSourceFlag                     1
+
+    #closedBodyTBCInfo                                                             
+    temperatureBCSetType            setHere 
+    temperatureBC                   fixedValue
+    fixedValueT                     304.0
+
+    #wall model
+    velocityBCSetType               setHere
+    velocityBC                        noSlip
+
+    searchCellRatio                 3
+
+    #procBounds
+    procBoundCenter               (1.3 1.3 2.75)
+    procBoundSize                 (1.3 1.3 0.5) 
+}
+
+object13
+{
+    bodyName                        light4.ucd
+    bodyType                        closedBody
+    thinBody                        0
+    fileType 			    ucd
+    sourceFlag                      0
+    bodyMotion                      static
+    baseLocation     	            (0.0 0.0 2.61)
+
+    #source proprties 
+    tSourceFlag                     1
+
+    #closedBodyTBCInfo                                                             
+    temperatureBCSetType            setHere 
+    temperatureBC                   fixedValue
+    fixedValueT                     304.0
+
+    #wall model
+    velocityBCSetType               setHere
+    velocityBC                        noSlip
+
+    searchCellRatio                 3
+
+    #procBounds
+    procBoundCenter               (3.3 1.3 2.75)
+    procBoundSize                 (1.3 1.3 0.5) 
+}
